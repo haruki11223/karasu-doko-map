@@ -331,3 +331,19 @@ AI_CONTEXT.md      開発ルールとプロジェクトの現状（このファ�
 **Bさんへ**
 - `lib/supabase.ts` はAさんがプルリクエストを出すので、マージされたら `git merge main` で取り込んでから `lib/photos.ts` を作る
 - Maps APIキーができたら、メンバーにLINEのDMなどで共有する
+
+## 2026/10/14　変更者：tanka
+
+### やったこと
+- Google Maps API のキーを取得し、HTTPリファラー制限とAPI制限を設定した
+- Supabase に写真用バケット `post-photos` を作成した（公開、500KBまで、jpeg/webpのみ）
+- 写真のアップロードルールを `supabase/storage.sql` に保存した（ブランチ `feature/photos`）
+
+### 決まったこと・変わったこと
+- アップロードのみ許可し、アプリからの上書き・削除はできない
+- ファイル名は重ならないよう、`uploadPhoto()` で毎回ランダムな名前にする
+
+### 残っている作業・次の人への連絡
+- Google Maps API の1日の上限と予算アラートは未設定（無料トライアル中のため設定できなかった。アップグレード前に設定する）
+- `lib/photos.ts`（`uploadPhoto()`）は、Aさんの `lib/supabase.ts` がマージされてから作る
+- Vercel の登録と環境変数の登録は未着手
