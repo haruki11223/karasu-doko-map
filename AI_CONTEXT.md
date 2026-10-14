@@ -36,7 +36,7 @@ VS Codeのターミナル（PowerShell）で、プロジェクトのフォルダ
 
 **新しい作業を始めるとき**
 
-```powershell
+```ターミナル
 git checkout main                # mainに移動
 git pull                         # 最新のmainを取り込む
 git checkout -b feature/作業名    # 新しいブランチを作って移動
@@ -46,7 +46,7 @@ npm run dev                      # アプリを起動（http://localhost:3000）
 
 **前回の続きの作業をするとき**
 
-```powershell
+```ターミナル
 git checkout main                # mainに移動
 git pull                         # 最新のmainを取り込む
 git checkout feature/作業名       # 自分のブランチに戻る
@@ -214,7 +214,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 
 ## 6. AIへのお願い（回答のしかた）
 
-- メンバーはアプリ開発の初心者で、Windows＋VS Code＋PowerShellを使っている。コマンドは PowerShell で動く形で示してほしい
+- メンバーはアプリ開発の初心者で、Windows＋VS Code＋を使っている。vscode内でのコマンドで動く形で示してほしい
 - 日本語の「ですます調」で、手順は1つずつ順番に説明してほしい
 - コードを変えるときは、どのファイルのどこを変えるかを明確にしてほしい
 - Next.js 16 は以前のバージョンと仕様が違う部分があるので、`AGENTS.md` の指示に従い、`node_modules/next/dist/docs/` の公式ドキュメントを確認してからコードを書いてほしい
