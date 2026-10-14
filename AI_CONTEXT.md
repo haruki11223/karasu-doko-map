@@ -1,4 +1,4 @@
-# AI引き継ぎ用コンテキスト（カラス被害どこマップ）
+git checkout -b docs/ai-context-1014# AI引き継ぎ用コンテキスト（カラス被害どこマップ）
 
 このファイルは、チームの開発ルールと、AIアシスタントに伝えるプロジェクトの現状をまとめたものです。
 **開発する人は、作業を始める前に必ずこのファイルの「開発ルール」を確認してください。**
@@ -347,3 +347,139 @@ AI_CONTEXT.md      開発ルールとプロジェクトの現状（このファ�
 - Google Maps API の1日の上限と予算アラートは未設定（無料トライアル中のため設定できなかった。アップグレード前に設定する）
 - `lib/photos.ts`（`uploadPhoto()`）は、Aさんの `lib/supabase.ts` がマージされてから作る
 - Vercel の登録と環境変数の登録は未着手
+
+## 2026/10/14　変更者：takoyaki（2回目）
+
+### やったこと
+- SupabaseのSQL Editorで `posts` テーブルの作成とRLSの設定を実行した（`supabase/schema.sql`）
+- ダミーデータ10件（金沢城公園、兼六園、金沢駅など金沢市内）を投入した（`supabase/seed.sql`）
+- `@supabase/supabase-js` を導入し、`lib/supabase.ts`（Supabaseへの接続設定）を作成した
+- `lib/posts.ts`（`getPosts`、`createPost`）を作成した
+- 確認用ページで、ダミーデータの取得とテスト投稿の保存ができることを確認した（確認用ページとテスト投稿は削除済み）
+- 上記をブランチ `feature/supabase-client` でプルリクエストに出した
+
+### 決まったこと・変わったこと
+
+**ファイル構成の追加**
+
+```
+lib/
+├── supabase.ts     Supabaseへの接続設定（全員がここから import する）
+└── posts.ts        投稿の取得・保存の関数（getPosts、createPost）
+supabase/
+└── seed.sql        テスト用のダミー投稿10件（実行するたびに10件増えるので注意）
+```
+
+**バックエンドが用意した関数（`lib/posts.ts`）**
+
+| 関数 | 使い道 | 戻り値 |
+|---|---|---|
+| `getPosts()` | 地図にピンを立てるための投稿一覧（見かけた時刻が新しい順、最大200件） | `Post[]` |
+| `createPost(データ)` | 投稿を1件保存する | 保存された `Post` |
+
+```ts
+import { getPosts, createPost, type Post, type NewPost } from "@/lib/posts";
+
+const posts = await getPosts();
+
+await createPost({
+  lat: 36.565,         // 必須
+  lng: 136.659,        // 必須
+  place_name: "金沢城公園",  // 以下は省略可
+  crow_count: 5,
+  observed_at: new Date().toISOString(),  // 省略すると投稿時刻
+  note: "電線に並んでいる",
+  photo_url: "https://...",  // uploadPhoto() が返すURL
+});
+```
+
+- 最大200件にしているのは、Supabaseの転送量（無料枠5GB/月）を抑えるため
+
+**Next.js 16 の注意（Cache Components）**
+
+このプロジェクトのNext.js 16では Cache Components が最初から有効になっている。**データベースからデータを読み込むコンポーネントは `<Suspense>` で囲まないとビルドエラーになる**（エラー文：`Next.js encountered uncached or runtime data during prerendering`）。
+
+```tsx
+import { Suspense } from "react";
+import { connection } from "next/server";
+import { getPosts } from "@/lib/posts";
+
+async function PostList() {
+  await connection();          // アクセスのたびに最新のデータを取得する
+  const posts = await getPosts();
+  return <p>{posts.length}件</p>;
+}
+
+export default function Page() {
+  return (
+    <Suspense fallback={<p>読み込み中...</p>}>
+      <PostList />
+    </Suspense>
+  );
+}
+```
+
+**環境変数の書き方の注意**
+
+- `NEXT_PUBLIC_SUPABASE_URL` は `https://プロジェクトID.supabase.co` の形だけを書く。後ろに `/rest/v1/` や `/` を付けると「Invalid path specified in request URL」というエラーになる
+- `.env.local` を書き換えたら、`npm run dev` を Ctrl + C で止めて起動し直す（起動時にしか読み込まれない）
+
+**今日つまずいたこと（同じミスを防ぐため）**
+
+- `.env.local` を名前の変更で作り、`.env.example` が消えた → `git restore .env.example` で復旧
+- 新しいPCでコミットしたら `Author identity unknown` → `git config --global user.name "GitHubのユーザー名"` と `git config --global user.email "GitHubのメールアドレス"` を設定していなかった。**新しいPCでは最初に必ず設定する**
+- `getPosts` で `Invalid path specified in request URL` → `.env.local` のSupabaseのURLに余計な部分が付いていた
+- 確認用ページのビルドで Cache Components のエラー → `<Suspense>` で囲んで解決
+
+### 残っている作業・次の人への連絡
+
+**Aさん（takoyaki）の作業の進み具合**
+
+- [x] `posts` テーブルの作成とRLSの設定（Supabase上で実行）
+- [x] ダミーデータの投入（金沢市内に10件）
+- [x] `@supabase/supabase-js` の導入と `lib/supabase.ts` の作成
+- [x] `lib/posts.ts`（`getPosts`、`createPost`）の作成
+- [x] 動作確認とプルリクエスト（`feature/supabase-client`）
+
+**Aさんの次の作業（予定）**
+- フロント担当（地図・投稿画面）と、`getPosts`・`createPost` の使い方をすり合わせる
+- 必要に応じて、地図の表示範囲内だけを取得する関数や、カラスのGPS位置用のダミーデータを検討する
+- DBの容量を定期的に確認する
+- 「プロジェクトの現状」の技術構成やファイル構成が古いままなので、次回まとめて更新する
+
+**Bさん（tanka）への今後の指示（この順番で進める）**
+
+1. **`lib/supabase.ts` を取り込む**
+   - `feature/supabase-client` がmainにマージされたら、次を実行する
+   ```ターミナル
+   git checkout main
+   git pull
+   git checkout feature/photos
+   git merge main
+   npm install      # @supabase/supabase-js が追加されたため
+   ```
+2. **`lib/photos.ts` に `uploadPhoto()` を作る**
+   - `lib/supabase.ts` の `supabase` を import して使う（新しく接続設定を作らない）
+   - 受け取った写真をブラウザ側で縮小・圧縮してから保存する。バケットの上限が500KBなので、目安は300KB以下
+   - バケットは jpeg と webp だけ許可しているので、PNGなど他の形式の写真も jpeg か webp に変換してから保存する
+   - 画像を描き直して保存し直すと、位置情報（EXIF）も消える。必ずこの処理を通してから保存する
+   - ファイル名は決めたとおり毎回ランダムにする（例：`crypto.randomUUID()` を使う）
+   - `post-photos` バケットに保存し、公開URL（文字列）を返す。このURLを `createPost({ ..., photo_url })` に渡す約束
+3. **動作確認をする**
+   - 確認用のページ（例：`app/photo-test`）を一時的に作り、写真を選ぶ → `uploadPhoto()` → `createPost()` まで通るか試す。確認が終わったらページは削除し、テストで保存したデータと写真も消す
+   - 写真が500KB以下になっているか、SupabaseのStorage画面でサイズを確認する
+4. **Google Maps のキーをメンバーに共有する**
+   - LINEのDMなどで送り、各自が `.env.local` の `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=` に書く。GitHubやこのファイルには書かない
+5. **Google Maps の1日の上限と予算アラート**
+   - 無料トライアルから有料アカウントにアップグレードする前に、必ず設定する（1日のリクエスト上限を小さめに、予算アラートは少額で）
+   - 予算アラートは通知だけで、自動では止まらないことに注意
+6. **Vercel の準備（リポジトリの公開設定が決まってから）**
+   - リポジトリは現在 Private。VercelのHobbyプランでは、Privateリポジトリに持ち主以外がコミットするとデプロイがブロックされるため、持ち主（haruki11223）と相談して Public にするか決める
+   - Vercel に `karasu-doko-map` をインポートし、Settings → Environment Variables に `.env.local` と同じ3つの値を登録する
+   - 公開URLができたら、Google Maps のキーのHTTPリファラー制限にそのURLを追加する
+
+**フロント担当（地図・投稿画面）へ**
+- `getPosts`・`createPost` が使えるようになった（使い方は上の「バックエンドが用意した関数」を参照）
+- データを読み込むコンポーネントは `<Suspense>` で囲む（上の「Next.js 16 の注意」を参照）
+- 地図の表示を試すときは、Supabaseにダミーデータが10件入っているのでそれを使える
+- 写真のアップロードは、Bさんの `uploadPhoto()` ができてから使う
