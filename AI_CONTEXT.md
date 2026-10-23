@@ -509,3 +509,18 @@ export default function Page() {
 - VercelのBuild Logsを確認し、デプロイ失敗の原因を調べる
 - Supabaseへの投稿保存と写真アップロードを接続する
 - 現在地から都道府県・市区町村を自動入力する機能は未実装
+## 2026/10/23　変更者：tanka
+
+### やったこと
+- Vercel のデプロイが Ready になった（原因は、Vercel に Supabase の環境変数が登録されていなかったこと）
+- Vercel の環境変数3つを作り直した（種類は通常のまま。NEXT_PUBLIC_ の変数は、ブラウザに公開される値のため）
+- 公開 URL を Google Maps のキーのリファラー制限に追加した
+
+### 決まったこと・変わったこと
+- Vercel の公開 URL：（ここに URL を書く）
+- Vercel は「Public にしたあと、環境変数を登録して再デプロイ」で動いた
+- 環境変数を追加・変更したら、再デプロイしないと反映されない
+
+### 残っている作業・次の人への連絡
+- Google Maps API の1日の上限と予算アラートは未設定（アップグレード前に設定する）
+- `lib/photos.ts`（`uploadPhoto()`）は、`feature/supabase-client` が main にマージされてから作る
