@@ -567,3 +567,19 @@ const posts = await getPostsInBounds({
 ### 残っている作業・次の人への連絡
 - VercelのBuild Failedは、環境変数（`NEXT_PUBLIC_SUPABASE_URL` と `NEXT_PUBLIC_SUPABASE_ANON_KEY`）が届いていないことが原因だった。Bさんが登録（Production・Preview）と再デプロイを確認する
 - `app/db-test` はmainに残っているので、消す必要がある（トキダさんに確認してから）
+
+## 2026/10/23　変更者：tanka
+
+### やったこと
+- `lib/photos.ts` に `uploadPhoto()` を作成した（ブランチ `feature/photo-upload`）
+- 確認用ページで、保存と公開URLの取得、サイズ、位置情報の削除を確認した（確認用ページとテスト写真は削除済み）
+
+### 決まったこと・変わったこと
+- 写真は、ブラウザ側で長い辺を最大1280ピクセルに縮小し、300KB前後まで圧縮してから保存する
+- 形式は webp（非対応のブラウザでは jpeg）。ファイル名は毎回ランダム
+
+### 残っている作業・次の人への連絡
+- フロント担当へ：`uploadPhoto(file)` が写真のURL（文字列）を返すので、`createPost({ ..., photo_url })` に渡す
+- ブラウザ上（ボタンを押したとき）で呼ぶこと
+- Next.js 16.4.0 に重大な脆弱性があり、16.4.2 への更新が必要（別ブランチで行う。事前にチームに連絡する）
+- Google Maps の1日の上限と予算アラートは未設定
