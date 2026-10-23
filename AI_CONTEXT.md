@@ -509,3 +509,46 @@ export default function Page() {
 - VercelのBuild Logsを確認し、デプロイ失敗の原因を調べる
 - Supabaseへの投稿保存と写真アップロードを接続する
 - 現在地から都道府県・市区町村を自動入力する機能は未実装
+
+## 2026/10/23　変更者：takoyaki
+
+### やったこと
+- `lib/posts.ts` に `getPostsInBounds()` を追加した（ブランチ `feature/posts-in-bounds`）
+- 確認用ページで、範囲の広さによって件数が変わることを確認した（確認用ページは削除済み）
+- Supabaseのプロジェクトが1週間アクセスがなく一時停止していたので、Restore projectで復活させた
+
+### 決まったこと・変わったこと
+
+**追加した関数（`lib/posts.ts`）**
+
+| 関数 | 使い道 | 戻り値 |
+|---|---|---|
+| `getPostsInBounds(bounds)` | 地図の表示範囲内の投稿だけを取得する（見かけた時刻が新しい順、最大200件） | `Post[]` |
+
+```ts
+import { getPostsInBounds } from "@/lib/posts";
+
+const b = map.getBounds()!;
+const sw = b.getSouthWest();
+const ne = b.getNorthEast();
+const posts = await getPostsInBounds({
+  south: sw.lat(),
+  west: sw.lng(),
+  north: ne.lat(),
+  east: ne.lng(),
+});
+```
+
+- 経度180度をまたぐ範囲には対応していない（金沢周辺では不要）
+- 投稿が数千件に増えたら、緯度・経度に索引を追加する
+
+**Supabaseの一時停止について**
+- 無料プランは1週間アクセスがないと停止する。`fetch failed` というエラーが出たら、まずSupabaseのダッシュボードで停止していないか確認する
+- 停止していたら **Restore project** で復活できる（データは消えない）
+
+**Node.jsの更新**
+- 2026/10/21にNode.jsのセキュリティリリースがあった。各自、`node -v` で確認し、24.x なら v24.22.1 以上に更新する
+
+### 残っている作業・次の人への連絡
+- VercelのBuild Failedは、環境変数（`NEXT_PUBLIC_SUPABASE_URL` と `NEXT_PUBLIC_SUPABASE_ANON_KEY`）が届いていないことが原因だった。Bさんが登録（Production・Preview）と再デプロイを確認する
+- `app/db-test` はmainに残っているので、消す必要がある（トキダさんに確認してから）
