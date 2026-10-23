@@ -1,6 +1,7 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useState } from "react";
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
+import { createPost, getPosts } from "@/lib/posts";
 
 const MAX_PHOTO_SIZE = 300 * 1024;
 
@@ -61,12 +62,19 @@ function compressPhoto(file: File): Promise<File> {
 export default function Home() {
   const [crowCount, setCrowCount] = useState("");
   const [observedAt, setObservedAt] = useState("");
+  const [selectedDateShortcut, setSelectedDateShortcut] = useState<number | null>(null);
+  const [selectedTimeShortcut, setSelectedTimeShortcut] = useState<number | null>(null);
+  const [note, setNote] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState("");
   const [photoError, setPhotoError] = useState("");
   const [locationMessage, setLocationMessage] = useState("");
   const [notice, setNotice] = useState("");
+  const [noticeIsError, setNoticeIsError] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [coordinates, setCoordinates] = useState({ lat: 36.565, lng: 136.659 });
+  const placeInput = useRef<HTMLInputElement>(null);
 
   function setObservedDate(daysAgo: number) {
     const date = new Date();
@@ -74,6 +82,7 @@ export default function Home() {
     const datePart = [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
     const timePart = observedAt.split("T")[1] ?? "08:00";
     setObservedAt(`${datePart}T${timePart}`);
+    setSelectedDateShortcut(daysAgo);
   }
 
   function setObservedTime(hour: number) {
@@ -83,6 +92,7 @@ export default function Home() {
       return [today.getFullYear(), String(today.getMonth() + 1).padStart(2, "0"), String(today.getDate()).padStart(2, "0")].join("-");
     })();
     setObservedAt(`${date}T${String(hour).padStart(2, "0")}:00`);
+    setSelectedTimeShortcut(hour);
   }
 
   useEffect(() => {
@@ -122,9 +132,12 @@ export default function Home() {
     setLocationMessage("");
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
-        const locationInput = document.getElementById("place") as HTMLInputElement | null;
-        if (locationInput) {
-          locationInput.value = `現在地（${coords.latitude.toFixed(5)}, ${coords.longitude.toFixed(5)}）`;
+        setCoordinates({
+          lat: Number(coords.latitude.toFixed(3)),
+          lng: Number(coords.longitude.toFixed(3)),
+        });
+        if (placeInput.current) {
+          placeInput.current.value = `現在地（${coords.latitude.toFixed(3)}, ${coords.longitude.toFixed(3)}）`;
         }
         setLocationMessage("現在地を場所欄に入力しました。必要に応じて場所の名前に書き換えてください。");
         setIsLocating(false);
@@ -137,11 +150,49 @@ export default function Home() {
     );
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
-    if (!form.reportValidity()) return;
-    setNotice("入力内容を確認しました。投稿の保存機能は準備中です。");
+    if (!form.reportValidity()) {
+      setNotice("必須項目を入力してください。赤い「*」が付いた項目をご確認ください。");
+      setNoticeIsError(true);
+      return;
+    }
+    const formData = new FormData(form);
+    setIsSubmitting(true);
+    setNotice("");
+    setNoticeIsError(false);
+
+    try {
+      await createPost({
+        lat: coordinates.lat,
+        lng: coordinates.lng,
+        place_name: String(formData.get("place") ?? "").trim(),
+        crow_count: Number(formData.get("crow_count")),
+        observed_at: new Date(String(formData.get("observed_at"))).toISOString(),
+        note: String(formData.get("note") ?? "").trim(),
+      });
+      setNotice("投稿を保存しました。写真のアップロード機能は未接続のため、写真は保存されていません。");
+      try {
+        const posts = await getPosts();
+        setNotice(`投稿を保存しました。最新の投稿を${posts.length}件取得しました。写真のアップロード機能は未接続のため、写真は保存されていません。`);
+      } catch {
+        setNotice("投稿を保存しましたが、投稿一覧を取得できませんでした。写真のアップロード機能は未接続のため、写真は保存されていません。");
+      }
+      form.reset();
+      setCrowCount("");
+      setObservedAt("");
+      setSelectedDateShortcut(null);
+      setSelectedTimeShortcut(null);
+      setNote("");
+      setPhoto(null);
+      setPhotoPreview("");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "投稿を保存できませんでした。入力内容を確認して、もう一度お試しください。");
+      setNoticeIsError(true);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -174,7 +225,7 @@ export default function Home() {
             <div className="field-group">
               <label htmlFor="place">場所 <span className="required-mark">*</span></label>
               <div className="location-row">
-                <input id="place" name="place" type="text" placeholder="例：金沢城公園 石川門付近" required maxLength={100} />
+                <input ref={placeInput} id="place" name="place" type="text" placeholder="例：金沢城公園 石川門付近" required maxLength={100} />
                 <button className="location-button" type="button" onClick={fillCurrentLocation} disabled={isLocating}>
                   <span aria-hidden="true">⌖</span>{isLocating ? "取得中…" : "現在地"}
                 </button>
@@ -199,28 +250,28 @@ export default function Home() {
                 <label htmlFor="observed-at">見かけた日時 <span className="required-mark">*</span></label>
                 <div className="quick-picks" aria-label="日付を簡単に入力">
                   {[{ label: "今日", days: 0 }, { label: "昨日", days: 1 }, { label: "2日前", days: 2 }, { label: "3日前", days: 3 }, { label: "7日前", days: 7 }].map(({ label, days }) => (
-                    <button className="quick-pick" key={label} type="button" onClick={() => setObservedDate(days)}>{label}</button>
+                    <button className={`quick-pick${selectedDateShortcut === days ? " is-selected" : ""}`} key={label} type="button" aria-pressed={selectedDateShortcut === days} onClick={() => setObservedDate(days)}>{label}</button>
                   ))}
                 </div>
                 <div className="quick-picks time-picks" aria-label="時間帯を簡単に入力">
                   {[{ label: "朝", hour: 8 }, { label: "昼", hour: 12 }, { label: "夜", hour: 20 }].map(({ label, hour }) => (
-                    <button className="quick-pick" key={label} type="button" onClick={() => setObservedTime(hour)}>{label} <span>{String(hour).padStart(2, "0")}:00</span></button>
+                    <button className={`quick-pick${selectedTimeShortcut === hour ? " is-selected" : ""}`} key={label} type="button" aria-pressed={selectedTimeShortcut === hour} onClick={() => setObservedTime(hour)}>{label} <span>{String(hour).padStart(2, "0")}:00</span></button>
                   ))}
                 </div>
-                <input id="observed-at" name="observed_at" type="datetime-local" value={observedAt} onChange={(event) => setObservedAt(event.target.value)} required />
-                <p className="field-hint">ボタンでおおよその日時を選び、必要なら下の欄で調整できます。</p>
+                <input id="observed-at" name="observed_at" type="datetime-local" value={observedAt} onChange={(event) => { setObservedAt(event.target.value); setSelectedDateShortcut(null); setSelectedTimeShortcut(null); }} required />
               </div>
             </div>
 
             <div className="field-group">
               <label htmlFor="note">メモ <span className="optional-label">任意</span></label>
-              <textarea id="note" name="note" rows={4} maxLength={500} placeholder="カラスの様子や周辺の被害などを入力してください。" />
+              <textarea id="note" name="note" rows={4} maxLength={500} placeholder="カラスの様子や周辺の被害などを入力してください。" value={note} onChange={(event) => setNote(event.target.value)} />
               <p className="field-hint">個人が特定できる情報は入力しないでください。</p>
+              <p className="field-hint">残り {500 - note.length} 文字</p>
             </div>
 
             <div className="field-group">
               <label htmlFor="photo">写真 <span className="optional-label">任意</span></label>
-              <label className="upload-box" htmlFor="photo">
+              <label className={`upload-box${photoPreview ? " has-photo" : ""}`} htmlFor="photo">
                 {photoPreview ? (
                   <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -236,12 +287,13 @@ export default function Home() {
                 )}
                 <input id="photo" name="photo" type="file" accept="image/*" onChange={handlePhotoChange} />
               </label>
+              <p className="field-hint">撮影した写真に人物や個人情報が写っている場合は、投稿前にぼかすなどの配慮をお願いします。</p>
               {photo && <p className="field-hint">準備できました（{Math.max(1, Math.round(photo.size / 1024))}KB）。位置情報を含む画像情報は除去しています。</p>}
               {photoError && <p className="error-message" role="alert">{photoError}</p>}
             </div>
 
-            {notice && <p className="submit-notice" role="status">{notice}</p>}
-            <button className="submit-button" type="submit">投稿内容を確認 <span aria-hidden="true">→</span></button>
+            {notice && <p className={`submit-notice${noticeIsError ? " is-error" : ""}`} role={noticeIsError ? "alert" : "status"}>{notice}</p>}
+            <button className="submit-button" type="submit" disabled={isSubmitting}>{isSubmitting ? "投稿を保存中…" : "投稿内容を確認"} <span aria-hidden="true">→</span></button>
             <p className="privacy-note"><span aria-hidden="true">◇</span> 投稿地点は安全のため、おおまかな位置での表示を予定しています。</p>
           </form>
         </section>
