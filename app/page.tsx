@@ -7,6 +7,43 @@ import { uploadPhoto } from "@/lib/photos";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+function formatObservedAt(dateString: string | null): string {
+  if (!dateString) return "不明";
+
+  const targetDate = new Date(dateString);
+  if (Number.isNaN(targetDate.getTime())) return "不明";
+
+  const now = new Date();
+  const targetDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.round((today.getTime() - targetDay.getTime()) / (1000 * 60 * 60 * 24));
+
+  let dayLabel: string;
+  if (diffDays === 0) {
+    dayLabel = "今日";
+  } else if (diffDays === 1) {
+    dayLabel = "昨日";
+  } else if (diffDays > 1) {
+    dayLabel = `${diffDays}日前`;
+  } else {
+    dayLabel = `${targetDate.getMonth() + 1}月${targetDate.getDate()}日`;
+  }
+
+  const hour = targetDate.getHours();
+  let timeLabel: string;
+  if (hour >= 4 && hour < 10) {
+    timeLabel = "朝";
+  } else if (hour >= 10 && hour < 16) {
+    timeLabel = "昼";
+  } else if (hour >= 16 && hour < 19) {
+    timeLabel = "夕方";
+  } else {
+    timeLabel = "夜";
+  }
+
+  return `${dayLabel} (${timeLabel})`;
+}
+
 function CrowMapSection() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
