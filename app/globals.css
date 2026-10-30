@@ -140,6 +140,17 @@ input:focus, textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px 
 
 .quick-pick.is-selected { border-color: var(--green); background: var(--green); color: #fff; }
 .quick-pick.is-selected span { color: #e2eee5; }
+
+.admin-unlock-trigger {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  cursor: default;
+}
+.admin-unlock-trigger:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
 .quick-pick.is-selected:hover { border-color: var(--green-dark); background: var(--green-dark); }
 
 .required-note { color: #59675e; font-size: 12px; font-weight: 600; }
