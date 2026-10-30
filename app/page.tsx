@@ -44,25 +44,9 @@ function formatObservedAt(dateString: string | null): string {
   return `${dayLabel} (${timeLabel})`;
 }
 
-function CrowMapSection() {
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
+function CrowMapSection({ posts, loading }: { posts: Post[]; loading: boolean }) {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const router = useRouter();
-
-  useEffect(() => {
-    async function loadPosts() {
-      try {
-        const data = await getPosts();
-        setPosts(data);
-      } catch (err) {
-        console.error("投稿の取得に失敗しました", err);
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadPosts();
-  }, []);
 
   const defaultCenter = { lat: 36.5613, lng: 136.6562 };
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
@@ -149,6 +133,8 @@ function CrowMapSection() {
 }
 
 export default function Home() {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [postsLoading, setPostsLoading] = useState(true);
   const [crowCount, setCrowCount] = useState("");
   const [observedAt, setObservedAt] = useState("");
   const [selectedDateShortcut, setSelectedDateShortcut] = useState<number | null>(null);
@@ -164,6 +150,39 @@ export default function Home() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [coordinates, setCoordinates] = useState({ lat: 36.565, lng: 136.659 });
   const placeInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let isActive = true;
+    let isLoadingPosts = false;
+
+    async function loadPosts() {
+      if (isLoadingPosts) return;
+      isLoadingPosts = true;
+      try {
+        const data = await getPosts();
+        if (isActive) setPosts(data);
+      } catch (error) {
+        console.error("投稿の取得に失敗しました", error);
+      } finally {
+        isLoadingPosts = false;
+        if (isActive) setPostsLoading(false);
+      }
+    }
+
+    function refreshWhenVisible() {
+      if (document.visibilityState === "visible") void loadPosts();
+    }
+
+    loadPosts();
+    const refreshInterval = window.setInterval(refreshWhenVisible, 60_000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      isActive = false;
+      window.clearInterval(refreshInterval);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, []);
 
   function setObservedDate(daysAgo: number) {
     const date = new Date();
@@ -260,6 +279,7 @@ export default function Home() {
       setNotice("投稿を保存しました。");
       try {
         const posts = await getPosts();
+        setPosts(posts);
         setNotice(`投稿を保存しました。最新の投稿を${posts.length}件取得しました。`);
       } catch {
         setNotice("投稿を保存しましたが、投稿一覧を取得できませんでした。");
@@ -309,7 +329,7 @@ export default function Home() {
         <section aria-labelledby="map-title" className="mb-8">
           <h2 id="map-title" className="sr-only">金沢市カラス目撃マップ</h2>
           <Suspense fallback={<div style={{ width: "100%", height: "450px" }} className="flex items-center justify-center bg-gray-100 rounded-xl">地図を読み込み中...</div>}>
-            <CrowMapSection />
+            <CrowMapSection posts={posts} loading={postsLoading} />
           </Suspense>
         </section>
 
