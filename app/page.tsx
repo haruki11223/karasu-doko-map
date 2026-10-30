@@ -4,6 +4,7 @@ import { ChangeEvent, FormEvent, useEffect, useRef, useState, Suspense } from "r
 import { APIProvider, Map, Marker, InfoWindow } from "@vis.gl/react-google-maps";
 import { getPosts, createPost, type Post } from "@/lib/posts";
 import { uploadPhoto } from "@/lib/photos";
+import { unlockAdminDelete, verifyAdminDeletePin } from "@/lib/admin-delete";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -150,6 +151,41 @@ export default function Home() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [coordinates, setCoordinates] = useState({ lat: 36.565, lng: 136.659 });
   const placeInput = useRef<HTMLInputElement>(null);
+  const adminTapCount = useRef(0);
+  const adminTapTimer = useRef<number | null>(null);
+
+  async function handleAdminTriggerClick() {
+    adminTapCount.current += 1;
+    if (adminTapTimer.current !== null) window.clearTimeout(adminTapTimer.current);
+
+    if (adminTapCount.current < 3) {
+      adminTapTimer.current = window.setTimeout(() => {
+        adminTapCount.current = 0;
+        adminTapTimer.current = null;
+      }, 1500);
+      return;
+    }
+
+    adminTapCount.current = 0;
+    adminTapTimer.current = null;
+    const pin = window.prompt("管理者パスワード（4桁）を入力してください");
+    if (pin === null) return;
+    if (!/^\d{4}$/.test(pin)) {
+      window.alert("パスワードは4桁の数字で入力してください。");
+      return;
+    }
+
+    try {
+      if (!(await verifyAdminDeletePin(pin))) {
+        window.alert("パスワードが違います。");
+        return;
+      }
+      unlockAdminDelete(pin);
+      window.alert("管理者モードを有効にしました。投稿の詳細画面に削除ボタンが表示されます。");
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "管理者設定を確認できませんでした。");
+    }
+  }
 
   useEffect(() => {
     let isActive = true;
@@ -321,7 +357,7 @@ export default function Home() {
       <div className="page-content" id="top">
         <section className="intro" aria-labelledby="page-title">
           <p className="eyebrow"><span className="eyebrow-dot" /> SIGHTING REPORT</p>
-          <h1 id="page-title">カラスを見かけましたか？</h1>
+          <h1 id="page-title">カラスを見かけましたか<button className="admin-unlock-trigger" type="button" aria-label="管理者モードを開く" onClick={handleAdminTriggerClick}>？</button></h1>
           <p className="intro-copy">目撃情報を共有して、地域のカラス被害を減らすために役立てましょう。</p>
         </section>
 

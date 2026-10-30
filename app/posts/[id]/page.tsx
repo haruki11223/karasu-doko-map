@@ -1,17 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { type Post } from "@/lib/posts";
+import { deletePostAsAdmin, isAdminDeleteUnlocked } from "@/lib/admin-delete";
 import Link from "next/link";
 
 export default function PostDetailPage() {
   const params = useParams();
+  const router = useRouter();
   const id = params.id as string;
   
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdminMode, setIsAdminMode] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  useEffect(() => {
+    setIsAdminMode(isAdminDeleteUnlocked());
+  }, []);
 
   useEffect(() => {
     async function fetchPostDetail() {
@@ -33,6 +42,21 @@ export default function PostDetailPage() {
     }
     fetchPostDetail();
   }, [id]);
+
+  async function handleDeletePost() {
+    if (!window.confirm("この投稿を削除します。この操作は取り消せません。よろしいですか？")) return;
+
+    setIsDeleting(true);
+    setDeleteError("");
+    try {
+      await deletePostAsAdmin(id);
+      router.replace("/");
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "投稿を削除できませんでした。");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   if (loading) {
     return <div style={{ padding: "40px", textAlign: "center" }}>読み込み中...</div>;
@@ -72,6 +96,20 @@ export default function PostDetailPage() {
             </div>
           )}
         </div>
+
+        {isAdminMode && (
+          <div style={{ marginTop: "20px", paddingTop: "16px", borderTop: "1px solid #eee" }}>
+            {deleteError && <p role="alert" style={{ margin: "0 0 10px", color: "#b42318", fontSize: "14px" }}>{deleteError}</p>}
+            <button
+              type="button"
+              onClick={handleDeletePost}
+              disabled={isDeleting}
+              style={{ width: "100%", padding: "12px", border: "none", borderRadius: "8px", background: "#b42318", color: "#fff", fontSize: "15px", fontWeight: "bold", cursor: isDeleting ? "wait" : "pointer", opacity: isDeleting ? 0.7 : 1 }}
+            >
+              {isDeleting ? "削除中…" : "この投稿を削除"}
+            </button>
+          </div>
+        )}
       </div>
     </main>
   );
