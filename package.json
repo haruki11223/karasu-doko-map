@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.3",
+    "@vis.gl/react-google-maps": "^1.10.1",
     "next": "16.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
