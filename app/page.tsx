@@ -1,9 +1,55 @@
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
-import { createPost, getPosts } from "@/lib/posts";
+import { ChangeEvent, FormEvent, useEffect, useRef, useState, Suspense } from "react";
+import { APIProvider, Map, Marker, InfoWindow } from "@vis.gl/react-google-maps";
+import { getPosts, createPost, type Post } from "@/lib/posts";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 const MAX_PHOTO_SIZE = 300 * 1024;
+
+// 日時を「今日」「昨日」「○日前」および「朝・昼・夕方・夜」に変換する関数
+function formatObservedAt(dateString: string | null): string {
+  if (!dateString) return "不明";
+
+  const targetDate = new Date(dateString);
+  if (isNaN(targetDate.getTime())) return "不明";
+
+  const now = new Date();
+
+  // 日付部分のみを比較するための計算（時刻を0:00:00に揃える）
+  const targetDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  const diffTime = today.getTime() - targetDay.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+  let dayLabel = "";
+  if (diffDays === 0) {
+    dayLabel = "今日";
+  } else if (diffDays === 1) {
+    dayLabel = "昨日";
+  } else if (diffDays > 1) {
+    dayLabel = `${diffDays}日前`;
+  } else {
+    dayLabel = `${targetDate.getMonth() + 1}月${targetDate.getDate()}日`;
+  }
+
+  // 時間帯の判定
+  const hour = targetDate.getHours();
+  let timeLabel = "";
+  if (hour >= 4 && hour < 10) {
+    timeLabel = "朝";
+  } else if (hour >= 10 && hour < 16) {
+    timeLabel = "昼";
+  } else if (hour >= 16 && hour < 19) {
+    timeLabel = "夕方";
+  } else {
+    timeLabel = "夜";
+  }
+
+  return `${dayLabel} (${timeLabel})`;
+}
 
 function compressPhoto(file: File): Promise<File> {
   return new Promise((resolve, reject) => {
@@ -57,6 +103,110 @@ function compressPhoto(file: File): Promise<File> {
     };
     image.src = objectUrl;
   });
+}
+
+function CrowMapSection() {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    async function loadPosts() {
+      try {
+        const data = await getPosts();
+        setPosts(data);
+      } catch (err) {
+        console.error("投稿の取得に失敗しました", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadPosts();
+  }, []);
+
+  const defaultCenter = { lat: 36.5613, lng: 136.6562 };
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+
+  return (
+    <div style={{ width: "100%", height: "450px" }} className="rounded-xl overflow-hidden shadow-md mb-8 border border-gray-200 relative">
+      <APIProvider apiKey={apiKey}>
+        <Map
+          defaultCenter={defaultCenter}
+          defaultZoom={13}
+          style={{ width: "100%", height: "100%" }}
+          onClick={() => setSelectedPost(null)}
+        >
+          {posts.map((post) => (
+            <Marker
+              key={post.id}
+              position={{ lat: post.lat, lng: post.lng }}
+              title={post.place_name || "カラス目撃情報"}
+              clickable={true}
+              onClick={(e) => {
+                if (e.domEvent) {
+                  e.domEvent.stopPropagation();
+                }
+                setSelectedPost(post);
+              }}
+            />
+          ))}
+
+          {selectedPost && (
+            <InfoWindow
+              position={{ lat: selectedPost.lat, lng: selectedPost.lng }}
+              onCloseClick={() => setSelectedPost(null)}
+              pixelOffset={[0, -35]}
+            >
+              <div style={{ padding: "6px", maxWidth: "220px", fontSize: "13px", color: "#333" }}>
+                {selectedPost.photo_url && (
+                  <div style={{ marginBottom: "8px", borderRadius: "6px", overflow: "hidden", maxHeight: "120px" }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={selectedPost.photo_url}
+                      alt="目撃された写真"
+                      style={{ width: "100%", height: "auto", objectFit: "cover" }}
+                    />
+                  </div>
+                )}
+                <h3 style={{ fontWeight: "bold", marginBottom: "4px", fontSize: "14px", borderBottom: "1px solid #ccc", paddingBottom: "3px" }}>
+                  {selectedPost.place_name || "カラス目撃情報"}
+                </h3>
+                <p style={{ margin: "2px 0" }}>
+                  <strong>羽数:</strong> {selectedPost.crow_count ?? "不明"} 羽
+                </p>
+                <p style={{ margin: "2px 0" }}>
+                  <strong>日時:</strong> {formatObservedAt(selectedPost.observed_at)}
+                </p>
+                <div style={{ marginTop: "8px", textAlign: "right" }}>
+                  <button
+                    onClick={() => router.push(`/posts/${selectedPost.id}`)}
+                    style={{
+                      backgroundColor: "#2563eb",
+                      color: "#fff",
+                      border: "none",
+                      padding: "4px 10px",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                    }}
+                  >
+                    詳細を見る →
+                  </button>
+                </div>
+              </div>
+            </InfoWindow>
+          )}
+        </Map>
+      </APIProvider>
+      {loading && (
+        <div className="absolute top-4 left-4 bg-white px-3 py-1.5 rounded-lg shadow text-sm text-gray-600 z-10">
+          地図上のピンを読み込み中...
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function Home() {
@@ -202,7 +352,15 @@ export default function Home() {
           <span className="brand-mark" aria-hidden="true">烏</span>
           <span>カラスどこマップ</span>
         </a>
-        <span className="topbar-note">金沢のカラス情報を共有</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <span className="topbar-note">金沢のカラス情報を共有</span>
+          <Link
+            href="/post"
+            style={{ background: "#dc2626", color: "#fff", padding: "6px 12px", borderRadius: "6px", fontSize: "13px", fontWeight: "bold", textDecoration: "none" }}
+          >
+            ＋ 投稿画面へ
+          </Link>
+        </div>
       </header>
 
       <div className="page-content" id="top">
@@ -210,6 +368,14 @@ export default function Home() {
           <p className="eyebrow"><span className="eyebrow-dot" /> SIGHTING REPORT</p>
           <h1 id="page-title">カラスを見かけましたか？</h1>
           <p className="intro-copy">目撃情報を共有して、地域のカラス被害を減らすために役立てましょう。</p>
+        </section>
+
+        {/* 地図表示エリア */}
+        <section aria-labelledby="map-title" className="mb-8">
+          <h2 id="map-title" className="sr-only">金沢市カラス目撃マップ</h2>
+          <Suspense fallback={<div style={{ width: "100%", height: "450px" }} className="flex items-center justify-center bg-gray-100 rounded-xl">地図を読み込み中...</div>}>
+            <CrowMapSection />
+          </Suspense>
         </section>
 
         <section className="form-card" aria-labelledby="form-title">
