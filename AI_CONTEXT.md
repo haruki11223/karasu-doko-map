@@ -517,7 +517,7 @@ export default function Page() {
 - 公開 URL を Google Maps のキーのリファラー制限に追加した
 
 ### 決まったこと・変わったこと
-- Vercel の公開 URL：（ここに URL を書く）
+- Vercel の公開 URL：https://karasu-doko-map.vercel.app/
 - Vercel は「Public にしたあと、環境変数を登録して再デプロイ」で動いた
 - 環境変数を追加・変更したら、再デプロイしないと反映されない
 
