@@ -148,6 +148,29 @@ input:focus, textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px 
 .error-message { padding: 9px 11px; font-size: 12px; font-weight: 600; }
 .submit-notice { border: 1px solid #d6e6d8; border-radius: 9px; font-size: 12px; }
 
+/* Larger, easier-to-read type for the main form controls. */
+.card-heading h2 { font-size: 20px; }
+.card-heading p { font-size: 14px; }
+.field-group > label:first-child { font-size: 16px; }
+.optional-label { font-size: 12px; }
+input:not([type="file"]), textarea { font-size: 16px; }
+.location-button { font-size: 16px; }
+.quick-pick { font-size: 16px; }
+.quick-pick span { font-size: 12px; }
+.count-input-wrap > span { font-size: 13px; }
+.field-hint { font-size: 12px; }
+.inline-message { font-size: 12px; }
+.upload-title { font-size: 16px; }
+.upload-hint { font-size: 12px; }
+.upload-change { font-size: 14px; }
+.submit-button { font-size: 16px; }
+.submit-notice, .error-message { font-size: 13px; }
+.privacy-note { font-size: 11px; }
+
+@media (max-width: 560px) {
+  .card-heading h2 { font-size: 19px; }
+}
+
 .upload-box {
   min-height: 148px;
   padding: 20px;
@@ -164,6 +187,10 @@ input:focus, textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px 
 .photo-preview { max-height: 260px; padding: 8px; border-radius: 10px; background: #e9efea; }
 .upload-change { padding: 7px 14px; border: 1px solid #cbd8cd; border-radius: 999px; background: #fff; color: #315b45; font-size: 11px; font-weight: 700; }
 .upload-box:hover .upload-change { border-color: #8ea793; background: #f4f8f4; }
+
+.upload-title { font-size: 16px; }
+.upload-hint { font-size: 12px; }
+.upload-change { font-size: 14px; }
 
 @media (max-width: 560px) {
   .upload-box { min-height: 140px; padding: 16px; }
@@ -204,6 +231,7 @@ input:focus, textarea:focus { border-color: var(--green); box-shadow: 0 0 0 3px 
 .location-button:active:not(:disabled), .count-stepper:active:not(:disabled), .quick-pick:active { transform: translateY(1px); }
 .quick-pick.is-selected, .quick-pick.is-selected:hover { border-color: var(--green); background: var(--green); color: #fff; }
 .quick-pick.is-selected span { color: #e2eee5; }
+
 .upload-box { cursor: pointer; }
 .upload-box:hover { border-color: #66866e; background: #edf4ee; }
 .upload-change { border-color: var(--action-outline); color: var(--action-ink); font-weight: 700; }
