@@ -673,5 +673,3 @@ app/post/page.tsx（投稿ページ）のコードは削除せずそのまま保
 詳細ページ（app/posts/[id]/page.tsx）を新規作成し、投稿の詳細情報・写真・メモの全文表示を実装する
 
 Supabase Storage に写真保存用のバケットを作成し、投稿時の画像アップロード処理（uploadPhoto）を接続する
-
-lib/posts.ts の createPost を使って投稿フォームの送信処理を完了させ、データベース保存と地図ピンへの即時反映を実装する
