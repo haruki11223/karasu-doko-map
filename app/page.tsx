@@ -2,62 +2,7 @@
 
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
 import { createPost, getPosts } from "@/lib/posts";
-
-const MAX_PHOTO_SIZE = 300 * 1024;
-
-function compressPhoto(file: File): Promise<File> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    const objectUrl = URL.createObjectURL(file);
-
-    image.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      const scale = Math.min(1, 1280 / Math.max(image.width, image.height));
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(image.width * scale);
-      canvas.height = Math.round(image.height * scale);
-      const context = canvas.getContext("2d");
-
-      if (!context) {
-        reject(new Error("写真を読み込めませんでした。別の画像をお試しください。"));
-        return;
-      }
-
-      context.drawImage(image, 0, 0, canvas.width, canvas.height);
-      let quality = 0.82;
-
-      const exportJpeg = () => {
-        canvas.toBlob(
-          (blob) => {
-            if (!blob) {
-              reject(new Error("写真を圧縮できませんでした。"));
-              return;
-            }
-            if (blob.size > MAX_PHOTO_SIZE && quality > 0.4) {
-              quality -= 0.1;
-              exportJpeg();
-              return;
-            }
-            if (blob.size > MAX_PHOTO_SIZE) {
-              reject(new Error("写真が大きすぎます。小さい画像をお選びください。"));
-              return;
-            }
-            resolve(new File([blob], "crow-sighting.jpg", { type: "image/jpeg" }));
-          },
-          "image/jpeg",
-          quality,
-        );
-      };
-
-      exportJpeg();
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error("写真を読み込めませんでした。別の画像をお試しください。"));
-    };
-    image.src = objectUrl;
-  });
-}
+import { uploadPhoto } from "@/lib/photos";
 
 export default function Home() {
   const [crowCount, setCrowCount] = useState("");
@@ -113,14 +58,8 @@ export default function Home() {
       return;
     }
 
-    try {
-      const compressed = await compressPhoto(selectedFile);
-      setPhoto(compressed);
-      setPhotoPreview(URL.createObjectURL(compressed));
-    } catch (error) {
-      setPhotoError(error instanceof Error ? error.message : "写真を処理できませんでした。");
-      event.target.value = "";
-    }
+    setPhoto(selectedFile);
+    setPhotoPreview(URL.createObjectURL(selectedFile));
   }
 
   function fillCurrentLocation() {
@@ -164,6 +103,7 @@ export default function Home() {
     setNoticeIsError(false);
 
     try {
+      const photoUrl = photo ? await uploadPhoto(photo) : undefined;
       await createPost({
         lat: coordinates.lat,
         lng: coordinates.lng,
@@ -171,13 +111,14 @@ export default function Home() {
         crow_count: Number(formData.get("crow_count")),
         observed_at: new Date(String(formData.get("observed_at"))).toISOString(),
         note: String(formData.get("note") ?? "").trim(),
+        photo_url: photoUrl,
       });
-      setNotice("投稿を保存しました。写真のアップロード機能は未接続のため、写真は保存されていません。");
+      setNotice("投稿を保存しました。");
       try {
         const posts = await getPosts();
-        setNotice(`投稿を保存しました。最新の投稿を${posts.length}件取得しました。写真のアップロード機能は未接続のため、写真は保存されていません。`);
+        setNotice(`投稿を保存しました。最新の投稿を${posts.length}件取得しました。`);
       } catch {
-        setNotice("投稿を保存しましたが、投稿一覧を取得できませんでした。写真のアップロード機能は未接続のため、写真は保存されていません。");
+        setNotice("投稿を保存しましたが、投稿一覧を取得できませんでした。");
       }
       form.reset();
       setCrowCount("");
@@ -282,13 +223,13 @@ export default function Home() {
                   <>
                     <span className="upload-icon" aria-hidden="true">＋</span>
                     <span className="upload-title">写真を選択</span>
-                    <span className="upload-hint">JPG・PNG / 300KB以下に自動調整</span>
+                    <span className="upload-hint">画像を選択すると投稿時に自動調整します</span>
                   </>
                 )}
                 <input id="photo" name="photo" type="file" accept="image/*" onChange={handlePhotoChange} />
               </label>
               <p className="field-hint">撮影した写真に人物や個人情報が写っている場合は、投稿前にぼかすなどの配慮をお願いします。</p>
-              {photo && <p className="field-hint">準備できました（{Math.max(1, Math.round(photo.size / 1024))}KB）。位置情報を含む画像情報は除去しています。</p>}
+              {photo && <p className="field-hint">選択済み（{Math.max(1, Math.round(photo.size / 1024))}KB）。投稿時に縮小・圧縮し、位置情報を含む画像情報を除去します。</p>}
               {photoError && <p className="error-message" role="alert">{photoError}</p>}
             </div>
 
