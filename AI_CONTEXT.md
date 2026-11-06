@@ -159,7 +159,7 @@ npm run dev
 - キーは `.env.local` だけに書く。コード、README、このファイル、コミット、チャットに書かない
 - `.env.local` は `.env.example` を**コピー**して作る（名前の変更で作ると `.env.example` が消える）
 - Supabase の `service_role` キーや Secret key は使わない。管理者削除のPINも、どこにも書かない
-- キーの受け渡しは LINE の DM で行う
+- キーの受け渡しは メールかLINEで行う
 
 ---
 
@@ -187,7 +187,6 @@ git push -u origin 自分のブランチ名   # 2回目からは git push だけ
    git branch -d 自分のブランチ名
    ```
 5. 自分の欄（8章）を更新して、上と同じ手順でコミットする（作業と同じブランチに入れてもよい）
-6. LINE で「〇〇を main に入れました」と一言連絡する
 
 ---
 
