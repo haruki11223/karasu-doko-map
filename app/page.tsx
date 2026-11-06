@@ -1,25 +1,62 @@
+
 "use client";
 
-import { ChangeEvent, FormEvent, useEffect, useRef, useState, Suspense } from "react";
-import { APIProvider, Map, Marker, InfoWindow } from "@vis.gl/react-google-maps";
-import { getPosts, createPost, type Post } from "@/lib/posts";
-import { uploadPhoto } from "@/lib/photos";
-import { unlockAdminDelete, verifyAdminDeletePin } from "@/lib/admin-delete";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import {
+  useEffect,
+  useRef,
+  useState,
+  Suspense,
+} from "react";
 
+import type { CSSProperties } from "react";
+
+import {
+  APIProvider,
+  Map,
+  Marker,
+  useMap,
+} from "@vis.gl/react-google-maps";
+
+import { getPosts, type Post } from "@/lib/posts";
+
+import {
+  unlockAdminDelete,
+  verifyAdminDeletePin,
+} from "@/lib/admin-delete";
+
+// ========================================
+// 投稿日時を表示する関数
+// ========================================
 function formatObservedAt(dateString: string | null): string {
   if (!dateString) return "不明";
 
   const targetDate = new Date(dateString);
-  if (Number.isNaN(targetDate.getTime())) return "不明";
+
+  if (Number.isNaN(targetDate.getTime())) {
+    return "不明";
+  }
 
   const now = new Date();
-  const targetDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const diffDays = Math.round((today.getTime() - targetDay.getTime()) / (1000 * 60 * 60 * 24));
+
+  const targetDay = new Date(
+    targetDate.getFullYear(),
+    targetDate.getMonth(),
+    targetDate.getDate()
+  );
+
+  const today = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  );
+
+  const diffDays = Math.round(
+    (today.getTime() - targetDay.getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
 
   let dayLabel: string;
+
   if (diffDays === 0) {
     dayLabel = "今日";
   } else if (diffDays === 1) {
@@ -31,7 +68,9 @@ function formatObservedAt(dateString: string | null): string {
   }
 
   const hour = targetDate.getHours();
+
   let timeLabel: string;
+
   if (hour >= 4 && hour < 10) {
     timeLabel = "朝";
   } else if (hour >= 10 && hour < 16) {
@@ -45,131 +84,533 @@ function formatObservedAt(dateString: string | null): string {
   return `${dayLabel} (${timeLabel})`;
 }
 
-function CrowMapSection({ posts, loading }: { posts: Post[]; loading: boolean }) {
-  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
-  const router = useRouter();
+// ========================================
+// 地図操作ボタン
+// ========================================
+function MapControls() {
+  const map = useMap();
+  const [isLocating, setIsLocating] = useState(false);
 
-  const defaultCenter = { lat: 36.5613, lng: 136.6562 };
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+  // 拡大
+  function handleZoomIn() {
+    if (!map) return;
+
+    map.setZoom((map.getZoom() ?? 13) + 1);
+  }
+
+  // 縮小
+  function handleZoomOut() {
+    if (!map) return;
+
+    map.setZoom((map.getZoom() ?? 13) - 1);
+  }
+
+  // 現在地
+  function handleCurrentLocation() {
+    if (!map) return;
+
+    if (!navigator.geolocation) {
+      window.alert("このブラウザでは現在地を取得できません。");
+      return;
+    }
+
+    setIsLocating(true);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        map.panTo({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+
+        map.setZoom(16);
+        setIsLocating(false);
+      },
+      (error) => {
+        console.error("現在地の取得に失敗しました", error);
+
+        setIsLocating(false);
+
+        if (error.code === error.PERMISSION_DENIED) {
+          window.alert("位置情報の使用が許可されていません。");
+        } else {
+          window.alert("現在地を取得できませんでした。");
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
+  }
+
+  const buttonStyle: CSSProperties = {
+    width: "48px",
+    height: "48px",
+    borderRadius: "50%",
+    border: "none",
+    background: "#ffffff",
+    color: "#333333",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "26px",
+    cursor: "pointer",
+    padding: 0,
+  };
 
   return (
-    <div style={{ width: "100%", height: "450px" }} className="rounded-xl overflow-hidden shadow-md mb-8 border border-gray-200 relative">
-      <APIProvider apiKey={apiKey}>
-        <Map
-          defaultCenter={defaultCenter}
-          defaultZoom={13}
-          style={{ width: "100%", height: "100%" }}
-          onClick={() => setSelectedPost(null)}
-        >
-          {posts.map((post) => (
-            <Marker
-              key={post.id}
-              position={{ lat: post.lat, lng: post.lng }}
-              title={post.place_name || "カラス目撃情報"}
-              clickable={true}
-              onClick={(e) => {
-                if (e.domEvent) {
-                  e.domEvent.stopPropagation();
-                }
-                setSelectedPost(post);
-              }}
-            />
-          ))}
+    <div
+      style={{
+        position: "absolute",
+        right: "16px",
+        top: "42%",
+        transform: "translateY(-50%)",
+        zIndex: 10,
+        display: "flex",
+        flexDirection: "column",
+        gap: "10px",
+      }}
+    >
+      <button
+        type="button"
+        aria-label="地図を拡大"
+        onClick={handleZoomIn}
+        style={buttonStyle}
+      >
+        +
+      </button>
 
-          {selectedPost && (
-            <InfoWindow
-              position={{ lat: selectedPost.lat, lng: selectedPost.lng }}
-              onCloseClick={() => setSelectedPost(null)}
-              pixelOffset={[0, -35]}
-            >
-              <div style={{ padding: "6px", maxWidth: "220px", fontSize: "13px", color: "#333" }}>
-                {selectedPost.photo_url && (
-                  <div style={{ marginBottom: "8px", borderRadius: "6px", overflow: "hidden", maxHeight: "120px" }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={selectedPost.photo_url}
-                      alt="目撃された写真"
-                      style={{ width: "100%", height: "auto", objectFit: "cover" }}
-                    />
-                  </div>
-                )}
-                <h3 style={{ fontWeight: "bold", marginBottom: "4px", fontSize: "14px", borderBottom: "1px solid #ccc", paddingBottom: "3px" }}>
-                  {selectedPost.place_name || "カラス目撃情報"}
-                </h3>
-                <p style={{ margin: "2px 0" }}>
-                  <strong>羽数:</strong> {selectedPost.crow_count ?? "不明"} 羽
-                </p>
-                <p style={{ margin: "2px 0" }}>
-                  <strong>日時:</strong> {formatObservedAt(selectedPost.observed_at)}
-                </p>
-                <div style={{ marginTop: "8px", textAlign: "right" }}>
-                  <button
-                    onClick={() => router.push(`/posts/${selectedPost.id}`)}
-                    style={{
-                      backgroundColor: "#2563eb",
-                      color: "#fff",
-                      border: "none",
-                      padding: "4px 10px",
-                      borderRadius: "4px",
-                      fontSize: "12px",
-                      fontWeight: "bold",
-                      cursor: "pointer",
-                    }}
-                  >
-                    詳細を見る →
-                  </button>
-                </div>
-              </div>
-            </InfoWindow>
-          )}
-        </Map>
-      </APIProvider>
-      {loading && (
-        <div className="absolute top-4 left-4 bg-white px-3 py-1.5 rounded-lg shadow text-sm text-gray-600 z-10">
-          地図上のピンを読み込み中...
-        </div>
-      )}
+      <button
+        type="button"
+        aria-label="地図を縮小"
+        onClick={handleZoomOut}
+        style={buttonStyle}
+      >
+        −
+      </button>
+
+      <button
+        type="button"
+        aria-label="現在地を表示"
+        onClick={handleCurrentLocation}
+        disabled={isLocating}
+        style={{
+          ...buttonStyle,
+          color: "#1677e8",
+          fontSize: "23px",
+          opacity: isLocating ? 0.6 : 1,
+        }}
+      >
+        {isLocating ? "…" : "➤"}
+      </button>
     </div>
   );
 }
 
+// ========================================
+// 投稿一覧・選択した投稿の詳細
+// ========================================
+function PostBottomSheet({
+  posts,
+  selectedPost,
+  onSelectPost,
+  onClose,
+}: {
+  posts: Post[];
+  selectedPost: Post;
+  onSelectPost: (post: Post) => void;
+  onClose: () => void;
+}) {
+  const map = useMap();
+
+  // 選択中の投稿を先頭にする
+  const sortedPosts = [
+    ...posts.filter((post) => post.id === selectedPost.id),
+    ...posts.filter((post) => post.id !== selectedPost.id),
+  ];
+
+  // 一覧から投稿を選択
+  function handleSelect(post: Post) {
+    onSelectPost(post);
+
+    map?.panTo({
+      lat: post.lat,
+      lng: post.lng,
+    });
+  }
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 30,
+        height: "min(65dvh, 600px)",
+        minHeight: "300px",
+        background: "#ffffff",
+        borderRadius: "20px 20px 0 0",
+        boxShadow: "0 -4px 20px rgba(0,0,0,0.18)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
+      {/* 上部のつまみ */}
+      <div
+        style={{
+          padding: "10px 0 6px",
+          display: "flex",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            width: "42px",
+            height: "5px",
+            borderRadius: "10px",
+            background: "#d5d5d5",
+          }}
+        />
+      </div>
+
+      {/* 一覧のタイトル */}
+      <div
+        style={{
+          padding: "8px 18px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderBottom: "1px solid #eeeeee",
+          flexShrink: 0,
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontSize: "18px",
+              fontWeight: 700,
+              color: "#333333",
+            }}
+          >
+            カラス目撃情報
+          </div>
+
+          <div
+            style={{
+              marginTop: "3px",
+              fontSize: "12px",
+              color: "#888888",
+            }}
+          >
+            {posts.length}件の投稿
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="一覧を閉じる"
+          style={{
+            width: "36px",
+            height: "36px",
+            border: "none",
+            borderRadius: "50%",
+            background: "#f1f1f1",
+            color: "#555555",
+            fontSize: "23px",
+            cursor: "pointer",
+          }}
+        >
+          ×
+        </button>
+      </div>
+
+      {/* 投稿一覧 */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          overscrollBehavior: "contain",
+        }}
+      >
+        {sortedPosts.map((post) => {
+          const isSelected = post.id === selectedPost.id;
+
+          return (
+            <div
+              key={post.id}
+              onClick={() => handleSelect(post)}
+              style={{
+                padding: "15px 16px",
+                borderBottom: "1px solid #dddddd",
+                background: isSelected ? "#edf4ff" : "#ffffff",
+                cursor: "pointer",
+              }}
+            >
+              {/* 場所・日時・羽数 */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: 700,
+                      color: "#333333",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {post.place_name || "場所不明"}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: "5px",
+                      fontSize: "13px",
+                      color: "#66809a",
+                    }}
+                  >
+                    {formatObservedAt(post.observed_at)}
+                    {"　"}
+                    {post.crow_count ?? "不明"}羽
+                  </div>
+                </div>
+
+                {isSelected && (
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      color: "#315b45",
+                      fontWeight: 700,
+                    }}
+                  >
+                    選択中
+                  </span>
+                )}
+              </div>
+
+              {/* 選択した投稿だけ詳細を表示 */}
+              {isSelected && (
+                <div
+                  style={{
+                    marginTop: "13px",
+                    paddingTop: "12px",
+                    borderTop: "1px solid #d9e3ef",
+                  }}
+                >
+                  {/* 写真が登録されている場合だけ表示 */}
+                  {post.photo_url && (
+                    <div
+                      style={{
+                        width: "100%",
+                        marginBottom: "12px",
+                        borderRadius: "10px",
+                        overflow: "hidden",
+                        background: "#f0f0f0",
+                      }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={post.photo_url}
+                        alt="カラスの目撃写真"
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          maxHeight: "240px",
+                          aspectRatio: "16 / 9",
+                          objectFit: "cover",
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      color: "#444444",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    目撃日時：
+                    {formatObservedAt(post.observed_at)}
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      color: "#444444",
+                      marginBottom: "12px",
+                    }}
+                  >
+                    羽数：
+                    {post.crow_count ?? "不明"} 羽
+                  </div>
+
+                  {/* 詳細ページへ移動 */}
+                  <a
+                    href={`/posts/${post.id}`}
+                    onClick={(event) => event.stopPropagation()}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "100%",
+                      minHeight: "42px",
+                      borderRadius: "8px",
+                      background: "#315b45",
+                      color: "#ffffff",
+                      fontSize: "14px",
+                      fontWeight: 700,
+                      textDecoration: "none",
+                    }}
+                  >
+                    詳細を見る →
+                  </a>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ========================================
+// マップ表示コンポーネント
+// ========================================
+function CrowMapSection({
+  posts,
+}: {
+  posts: Post[];
+}) {
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+
+  const apiKey =
+    process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
+
+  // 金沢市の初期表示位置
+  const defaultCenter = {
+    lat: 36.5613,
+    lng: 136.6562,
+  };
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        margin: 0,
+        padding: 0,
+        border: "none",
+        borderRadius: 0,
+        overflow: "hidden",
+      }}
+    >
+      <APIProvider apiKey={apiKey}>
+        <Map
+          defaultCenter={defaultCenter}
+          defaultZoom={13}
+          gestureHandling="greedy"
+          disableDefaultUI={true}
+          clickableIcons={false}
+          style={{
+            width: "100%",
+            height: "100%",
+          }}
+          onClick={() => setSelectedPost(null)}
+        >
+          {/* カラスの目撃情報のピン */}
+          {posts.map((post) => (
+            <Marker
+              key={post.id}
+              position={{
+                lat: post.lat,
+                lng: post.lng,
+              }}
+              title={post.place_name || "カラス目撃情報"}
+              clickable={true}
+              onClick={(event) => {
+                event.domEvent?.stopPropagation();
+                setSelectedPost(post);
+              }}
+            />
+          ))}
+        </Map>
+
+        {/* 地図操作ボタン */}
+        <MapControls />
+
+        {/* ピン選択時の投稿一覧 */}
+        {selectedPost && (
+          <PostBottomSheet
+            posts={posts}
+            selectedPost={selectedPost}
+            onSelectPost={setSelectedPost}
+            onClose={() => setSelectedPost(null)}
+          />
+        )}
+      </APIProvider>
+    </div>
+  );
+}
+
+// ========================================
+// ホーム画面
+// ========================================
 export default function Home() {
   const [posts, setPosts] = useState<Post[]>([]);
-  const [postsLoading, setPostsLoading] = useState(true);
-  const [crowCount, setCrowCount] = useState("");
-  const [observedAt, setObservedAt] = useState("");
-  const [selectedDateShortcut, setSelectedDateShortcut] = useState<number | null>(null);
-  const [selectedTimeShortcut, setSelectedTimeShortcut] = useState<number | null>(null);
-  const [note, setNote] = useState("");
-  const [photo, setPhoto] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState("");
-  const [photoError, setPhotoError] = useState("");
-  const [locationMessage, setLocationMessage] = useState("");
-  const [notice, setNotice] = useState("");
-  const [noticeIsError, setNoticeIsError] = useState(false);
-  const [isLocating, setIsLocating] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [coordinates, setCoordinates] = useState({ lat: 36.565, lng: 136.659 });
-  const placeInput = useRef<HTMLInputElement>(null);
+
   const adminTapCount = useRef(0);
   const adminTapTimer = useRef<number | null>(null);
 
+  // ========================================
+  // 管理者モード
+  // ========================================
   async function handleAdminTriggerClick() {
     adminTapCount.current += 1;
-    if (adminTapTimer.current !== null) window.clearTimeout(adminTapTimer.current);
+
+    if (adminTapTimer.current !== null) {
+      window.clearTimeout(adminTapTimer.current);
+    }
 
     if (adminTapCount.current < 3) {
       adminTapTimer.current = window.setTimeout(() => {
         adminTapCount.current = 0;
         adminTapTimer.current = null;
       }, 1500);
+
       return;
     }
 
     adminTapCount.current = 0;
     adminTapTimer.current = null;
-    const pin = window.prompt("管理者パスワード（4桁）を入力してください");
+
+    const pin = window.prompt(
+      "管理者パスワード（4桁）を入力してください"
+    );
+
     if (pin === null) return;
+
     if (!/^\d{4}$/.test(pin)) {
       window.alert("パスワードは4桁の数字で入力してください。");
       return;
@@ -180,282 +621,176 @@ export default function Home() {
         window.alert("パスワードが違います。");
         return;
       }
+
       unlockAdminDelete(pin);
-      window.alert("管理者モードを有効にしました。投稿の詳細画面に削除ボタンが表示されます。");
+
+      window.alert(
+        "管理者モードを有効にしました。投稿の詳細画面に削除ボタンが表示されます。"
+      );
     } catch (error) {
-      window.alert(error instanceof Error ? error.message : "管理者設定を確認できませんでした。");
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "管理者設定を確認できませんでした。"
+      );
     }
   }
 
+  // ========================================
+  // 投稿情報の取得・60秒ごとの更新
+  // ========================================
   useEffect(() => {
     let isActive = true;
     let isLoadingPosts = false;
 
     async function loadPosts() {
-      if (isLoadingPosts) return;
+      if (!isActive || isLoadingPosts) return;
+
       isLoadingPosts = true;
+
       try {
         const data = await getPosts();
-        if (isActive) setPosts(data);
+
+        if (isActive) {
+          setPosts(data);
+        }
       } catch (error) {
-        console.error("投稿の取得に失敗しました", error);
+        console.error(
+          "投稿の取得に失敗しました",
+          error
+        );
       } finally {
         isLoadingPosts = false;
-        if (isActive) setPostsLoading(false);
       }
     }
 
+    // 初回読み込み
+    void loadPosts();
+
+    // ページが表示されたときに再取得
     function refreshWhenVisible() {
-      if (document.visibilityState === "visible") void loadPosts();
+      if (document.visibilityState === "visible") {
+        void loadPosts();
+      }
     }
 
-    loadPosts();
-    const refreshInterval = window.setInterval(refreshWhenVisible, 60_000);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
+    // 60秒ごとに更新
+    const refreshInterval = window.setInterval(
+      refreshWhenVisible,
+      60_000
+    );
+
+    // タブが再び表示されたときにも更新
+    document.addEventListener(
+      "visibilitychange",
+      refreshWhenVisible
+    );
 
     return () => {
       isActive = false;
+
       window.clearInterval(refreshInterval);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
+
+      document.removeEventListener(
+        "visibilitychange",
+        refreshWhenVisible
+      );
+
+      if (adminTapTimer.current !== null) {
+        window.clearTimeout(adminTapTimer.current);
+        adminTapTimer.current = null;
+      }
     };
   }, []);
 
-  function setObservedDate(daysAgo: number) {
-    const date = new Date();
-    date.setDate(date.getDate() - daysAgo);
-    const datePart = [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
-    const timePart = observedAt.split("T")[1] ?? "08:00";
-    setObservedAt(`${datePart}T${timePart}`);
-    setSelectedDateShortcut(daysAgo);
-  }
-
-  function setObservedTime(hour: number) {
-    const datePart = observedAt.split("T")[0] ?? "";
-    const date = datePart || (() => {
-      const today = new Date();
-      return [today.getFullYear(), String(today.getMonth() + 1).padStart(2, "0"), String(today.getDate()).padStart(2, "0")].join("-");
-    })();
-    setObservedAt(`${date}T${String(hour).padStart(2, "0")}:00`);
-    setSelectedTimeShortcut(hour);
-  }
-
-  useEffect(() => {
-    return () => {
-      if (photoPreview) URL.revokeObjectURL(photoPreview);
-    };
-  }, [photoPreview]);
-
-  async function handlePhotoChange(event: ChangeEvent<HTMLInputElement>) {
-    const selectedFile = event.target.files?.[0];
-    setPhotoError("");
-    setPhoto(null);
-    setPhotoPreview("");
-    if (!selectedFile) return;
-    if (!selectedFile.type.startsWith("image/")) {
-      setPhotoError("画像ファイルを選択してください。");
-      event.target.value = "";
-      return;
-    }
-
-    setPhoto(selectedFile);
-    setPhotoPreview(URL.createObjectURL(selectedFile));
-  }
-
-  function fillCurrentLocation() {
-    if (!navigator.geolocation) {
-      setLocationMessage("このブラウザーでは現在地を取得できません。場所を入力してください。");
-      return;
-    }
-    setIsLocating(true);
-    setLocationMessage("");
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        setCoordinates({
-          lat: Number(coords.latitude.toFixed(3)),
-          lng: Number(coords.longitude.toFixed(3)),
-        });
-        if (placeInput.current) {
-          placeInput.current.value = `現在地（${coords.latitude.toFixed(3)}, ${coords.longitude.toFixed(3)}）`;
-        }
-        setLocationMessage("現在地を場所欄に入力しました。必要に応じて場所の名前に書き換えてください。");
-        setIsLocating(false);
-      },
-      () => {
-        setLocationMessage("現在地を取得できませんでした。場所を入力してください。");
-        setIsLocating(false);
-      },
-      { enableHighAccuracy: false, timeout: 10000 },
-    );
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    if (!form.reportValidity()) {
-      setNotice("必須項目を入力してください。赤い「*」が付いた項目をご確認ください。");
-      setNoticeIsError(true);
-      return;
-    }
-    const formData = new FormData(form);
-    setIsSubmitting(true);
-    setNotice("");
-    setNoticeIsError(false);
-
-    try {
-      const photoUrl = photo ? await uploadPhoto(photo) : undefined;
-      await createPost({
-        lat: coordinates.lat,
-        lng: coordinates.lng,
-        place_name: String(formData.get("place") ?? "").trim(),
-        crow_count: Number(formData.get("crow_count")),
-        observed_at: new Date(String(formData.get("observed_at"))).toISOString(),
-        note: String(formData.get("note") ?? "").trim(),
-        photo_url: photoUrl,
-      });
-      setNotice("投稿を保存しました。");
-      try {
-        const posts = await getPosts();
-        setPosts(posts);
-        setNotice(`投稿を保存しました。最新の投稿を${posts.length}件取得しました。`);
-      } catch {
-        setNotice("投稿を保存しましたが、投稿一覧を取得できませんでした。");
-      }
-      form.reset();
-      setCrowCount("");
-      setObservedAt("");
-      setSelectedDateShortcut(null);
-      setSelectedTimeShortcut(null);
-      setNote("");
-      setPhoto(null);
-      setPhotoPreview("");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "投稿を保存できませんでした。入力内容を確認して、もう一度お試しください。");
-      setNoticeIsError(true);
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
+  // ========================================
+  // 画面表示
+  // ========================================
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <a className="brand" href="#top" aria-label="カラスどこマップ ホーム">
-          <span className="brand-mark" aria-hidden="true">烏</span>
-          <span>カラスどこマップ</span>
-        </a>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span className="topbar-note">金沢のカラス情報を共有</span>
-          <Link
-            href="/post"
-            style={{ background: "#dc2626", color: "#fff", padding: "6px 12px", borderRadius: "6px", fontSize: "13px", fontWeight: "bold", textDecoration: "none" }}
+    <main
+      style={{
+        position: "fixed",
+        inset: 0,
+        width: "100%",
+        height: "100vh",
+        height: "100dvh",
+        margin: 0,
+        padding: 0,
+        overflow: "hidden",
+        background: "#ffffff",
+        border: "none",
+        borderRadius: 0,
+        boxShadow: "none",
+        isolation: "isolate",
+      }}
+    >
+      {/* 全画面マップ */}
+      <Suspense
+        fallback={
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "#ffffff",
+            }}
           >
-            ＋ 投稿画面へ
-          </Link>
-        </div>
-      </header>
-
-      <div className="page-content" id="top">
-        <section className="intro" aria-labelledby="page-title">
-          <p className="eyebrow"><span className="eyebrow-dot" /> SIGHTING REPORT</p>
-          <h1 id="page-title">カラスを見かけましたか<button className="admin-unlock-trigger" type="button" aria-label="管理者モードを開く" onClick={handleAdminTriggerClick}>？</button></h1>
-          <p className="intro-copy">目撃情報を共有して、地域のカラス被害を減らすために役立てましょう。</p>
-        </section>
-
-        {/* 地図表示エリア */}
-        <section aria-labelledby="map-title" className="mb-8">
-          <h2 id="map-title" className="sr-only">金沢市カラス目撃マップ</h2>
-          <Suspense fallback={<div style={{ width: "100%", height: "450px" }} className="flex items-center justify-center bg-gray-100 rounded-xl">地図を読み込み中...</div>}>
-            <CrowMapSection posts={posts} loading={postsLoading} />
-          </Suspense>
-        </section>
-
-        <section className="form-card" aria-labelledby="form-title">
-          <div className="card-heading">
-            <div>
-              <h2 id="form-title">目撃情報を投稿</h2>
-              <p>わかる範囲で入力してください。</p>
-            </div>
-            <span className="required-note"><span>*</span> 必須項目</span>
+            地図を読み込み中...
           </div>
+        }
+      >
+        <CrowMapSection posts={posts} />
+      </Suspense>
 
-          <form onSubmit={handleSubmit}>
-            <div className="field-group">
-              <label htmlFor="place">場所 <span className="required-mark">*</span></label>
-              <div className="location-row">
-                <input ref={placeInput} id="place" name="place" type="text" placeholder="例：金沢城公園 石川門付近" required maxLength={100} />
-                <button className="location-button" type="button" onClick={fillCurrentLocation} disabled={isLocating}>
-                  <span aria-hidden="true">⌖</span>{isLocating ? "取得中…" : "現在地"}
-                </button>
-              </div>
-              <p className="field-hint">住所や目印など、場所がわかる情報を入力してください。</p>
-              {locationMessage && <p className="inline-message" role="status">{locationMessage}</p>}
-            </div>
+      {/* 投稿画面へ移動するボタン */}
+      <a
+        href="/post"
+        aria-label="目撃情報を投稿する"
+        style={{
+          position: "absolute",
+          left: "16px",
+          right: "16px",
+          bottom: "max(20px, env(safe-area-inset-bottom))",
+          zIndex: 20,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "58px",
+          border: "none",
+          borderRadius: "12px",
+          background: "#315b45",
+          color: "#ffffff",
+          fontSize: "16px",
+          fontWeight: 700,
+          textDecoration: "none",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.22)",
+          cursor: "pointer",
+          WebkitTapHighlightColor: "transparent",
+        }}
+      >
+        ＋ 目撃情報を投稿
+      </a>
 
-            <div className="field-grid">
-              <div className="field-group">
-                <label htmlFor="crow-count">見かけた羽数 <span className="required-mark">*</span></label>
-                <div className="count-control">
-                  <button className="count-stepper" type="button" aria-label="羽数を1羽減らす" disabled={!crowCount || Number(crowCount) <= 1} onClick={() => setCrowCount(String(Math.max(1, Number(crowCount) - 1)))}>−</button>
-                  <div className="count-input-wrap">
-                    <input id="crow-count" name="crow_count" type="number" min="1" max="9999" placeholder="例：5" value={crowCount} onChange={(event) => setCrowCount(event.target.value)} required />
-                    <span>羽</span>
-                  </div>
-                  <button className="count-stepper" type="button" aria-label="羽数を1羽増やす" disabled={Number(crowCount) >= 9999} onClick={() => setCrowCount(String(Math.min(9999, (Number(crowCount) || 0) + 1)))}>＋</button>
-                </div>
-              </div>
-              <div className="field-group">
-                <label htmlFor="observed-at">見かけた日時 <span className="required-mark">*</span></label>
-                <div className="quick-picks" aria-label="日付を簡単に入力">
-                  {[{ label: "今日", days: 0 }, { label: "昨日", days: 1 }, { label: "2日前", days: 2 }, { label: "3日前", days: 3 }, { label: "7日前", days: 7 }].map(({ label, days }) => (
-                    <button className={`quick-pick${selectedDateShortcut === days ? " is-selected" : ""}`} key={label} type="button" aria-pressed={selectedDateShortcut === days} onClick={() => setObservedDate(days)}>{label}</button>
-                  ))}
-                </div>
-                <div className="quick-picks time-picks" aria-label="時間帯を簡単に入力">
-                  {[{ label: "朝", hour: 8 }, { label: "昼", hour: 12 }, { label: "夜", hour: 20 }].map(({ label, hour }) => (
-                    <button className={`quick-pick${selectedTimeShortcut === hour ? " is-selected" : ""}`} key={label} type="button" aria-pressed={selectedTimeShortcut === hour} onClick={() => setObservedTime(hour)}>{label} <span>{String(hour).padStart(2, "0")}:00</span></button>
-                  ))}
-                </div>
-                <input id="observed-at" name="observed_at" type="datetime-local" value={observedAt} onChange={(event) => { setObservedAt(event.target.value); setSelectedDateShortcut(null); setSelectedTimeShortcut(null); }} required />
-              </div>
-            </div>
-
-            <div className="field-group">
-              <label htmlFor="note">メモ <span className="optional-label">任意</span></label>
-              <textarea id="note" name="note" rows={4} maxLength={500} placeholder="カラスの様子や周辺の被害などを入力してください。" value={note} onChange={(event) => setNote(event.target.value)} />
-              <p className="field-hint">個人が特定できる情報は入力しないでください。</p>
-              <p className="field-hint">残り {500 - note.length} 文字</p>
-            </div>
-
-            <div className="field-group">
-              <label htmlFor="photo">写真 <span className="optional-label">任意</span></label>
-              <label className={`upload-box${photoPreview ? " has-photo" : ""}`} htmlFor="photo">
-                {photoPreview ? (
-                  <>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img className="photo-preview" src={photoPreview} alt="選択した写真のプレビュー" />
-                    <span className="upload-change">写真を変更</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="upload-icon" aria-hidden="true">＋</span>
-                    <span className="upload-title">写真を選択</span>
-                    <span className="upload-hint">画像を選択すると投稿時に自動調整します</span>
-                  </>
-                )}
-                <input id="photo" name="photo" type="file" accept="image/*" onChange={handlePhotoChange} />
-              </label>
-              <p className="field-hint">撮影した写真に人物や個人情報が写っている場合は、投稿前にぼかすなどの配慮をお願いします。</p>
-              {photo && <p className="field-hint">選択済み（{Math.max(1, Math.round(photo.size / 1024))}KB）。投稿時に縮小・圧縮し、位置情報を含む画像情報を除去します。</p>}
-              {photoError && <p className="error-message" role="alert">{photoError}</p>}
-            </div>
-
-            {notice && <p className={`submit-notice${noticeIsError ? " is-error" : ""}`} role={noticeIsError ? "alert" : "status"}>{notice}</p>}
-            <button className="submit-button" type="submit" disabled={isSubmitting}>{isSubmitting ? "投稿を保存中…" : "投稿内容を確認"} <span aria-hidden="true">→</span></button>
-            <p className="privacy-note"><span aria-hidden="true">◇</span> 投稿地点は安全のため、おおまかな位置での表示を予定しています。</p>
-          </form>
-        </section>
-        <footer className="page-footer">カラスどこマップ <span>·</span> 金沢市内の目撃情報共有プロジェクト</footer>
-      </div>
+      {/* 管理者モード起動用の透明なクリック領域 */}
+      <button
+        type="button"
+        aria-label="管理者モード"
+        onClick={handleAdminTriggerClick}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "44px",
+          height: "44px",
+          opacity: 0,
+          border: "none",
+          padding: 0,
+          zIndex: 40,
+          cursor: "default",
+        }}
+      />
     </main>
   );
 }
