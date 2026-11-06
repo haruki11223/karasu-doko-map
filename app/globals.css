@@ -249,3 +249,19 @@ input:not([type="file"]), textarea { font-size: 16px; }
 .field-hint, .inline-message, .privacy-note { cursor: default; }
 .field-hint { color: #65736a; }
 .upload-hint { color: #65736a; }
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  background: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
