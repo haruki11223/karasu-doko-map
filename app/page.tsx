@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import { useEffect, useRef, useState, Suspense } from "react";
@@ -8,15 +9,19 @@ import {
   Marker,
   InfoWindow,
 } from "@vis.gl/react-google-maps";
+
 import { getPosts, type Post } from "@/lib/posts";
 import {
   unlockAdminDelete,
   verifyAdminDeletePin,
 } from "@/lib/admin-delete";
+
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+// ========================================
 // 投稿日時を表示する関数
+// ========================================
 function formatObservedAt(dateString: string | null): string {
   if (!dateString) return "不明";
 
@@ -74,7 +79,9 @@ function formatObservedAt(dateString: string | null): string {
   return `${dayLabel} (${timeLabel})`;
 }
 
+// ========================================
 // マップ表示コンポーネント
+// ========================================
 function CrowMapSection({
   posts,
   loading,
@@ -85,6 +92,7 @@ function CrowMapSection({
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const router = useRouter();
 
+  // Google Maps APIキー
   const apiKey =
     process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
 
@@ -111,12 +119,12 @@ function CrowMapSection({
         <Map
           defaultCenter={defaultCenter}
           defaultZoom={13}
+          gestureHandling="greedy"
+          disableDefaultUI={true}
           style={{
             width: "100%",
             height: "100%",
           }}
-          disableDefaultUI={true}
-          gestureHandling="greedy"
           onClick={() => setSelectedPost(null)}
         >
           {/* 投稿されたカラス情報のピン */}
@@ -139,7 +147,7 @@ function CrowMapSection({
             />
           ))}
 
-          {/* ピンを押したときの詳細情報 */}
+          {/* ピンを選択したときの詳細情報 */}
           {selectedPost && (
             <InfoWindow
               position={{
@@ -244,7 +252,7 @@ function CrowMapSection({
         </div>
       )}
 
-      {/* 投稿がない場合 */}
+      {/* 投稿情報がない場合 */}
       {!loading && posts.length === 0 && (
         <div className="absolute top-4 left-4 bg-white px-3 py-1.5 rounded-lg shadow text-sm text-gray-600 z-10">
           まだカラスの目撃情報はありません。
@@ -254,7 +262,9 @@ function CrowMapSection({
   );
 }
 
+// ========================================
 // ホーム画面
+// ========================================
 export default function Home() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [postsLoading, setPostsLoading] = useState(true);
@@ -262,7 +272,9 @@ export default function Home() {
   const adminTapCount = useRef(0);
   const adminTapTimer = useRef<number | null>(null);
 
+  // ========================================
   // 管理者モードの起動
+  // ========================================
   async function handleAdminTriggerClick() {
     adminTapCount.current += 1;
 
@@ -315,7 +327,9 @@ export default function Home() {
     }
   }
 
-  // 投稿情報の取得と定期更新
+  // ========================================
+  // 投稿情報の取得・自動更新
+  // ========================================
   useEffect(() => {
     let isActive = true;
     let isLoadingPosts = false;
@@ -348,19 +362,20 @@ export default function Home() {
     // 初回読み込み
     void loadPosts();
 
-    // ページが表示されたときに更新
+    // ページが表示されたときに再取得
     function refreshWhenVisible() {
       if (document.visibilityState === "visible") {
         void loadPosts();
       }
     }
 
-    // 60秒ごとの自動更新
+    // 60秒ごとに更新
     const refreshInterval = window.setInterval(
       refreshWhenVisible,
       60_000
     );
 
+    // タブが再び表示されたときにも更新
     document.addEventListener(
       "visibilitychange",
       refreshWhenVisible
@@ -375,9 +390,16 @@ export default function Home() {
         "visibilitychange",
         refreshWhenVisible
       );
+
+      if (adminTapTimer.current !== null) {
+        window.clearTimeout(adminTapTimer.current);
+      }
     };
   }, []);
 
+  // ========================================
+  // 画面表示
+  // ========================================
   return (
     <main className="app-shell">
       {/* ヘッダー */}
@@ -386,6 +408,7 @@ export default function Home() {
           className="brand"
           href="/"
           aria-label="カラスどこマップ ホーム"
+          onClick={handleAdminTriggerClick}
         >
           <span className="brand-mark" aria-hidden="true">
             烏
@@ -412,15 +435,6 @@ export default function Home() {
 
           <h1 id="page-title">
             カラスを見かけましたか
-
-            <button
-              className="admin-unlock-trigger"
-              type="button"
-              aria-label="管理者モードを開く"
-              onClick={handleAdminTriggerClick}
-            >
-              ？
-            </button>
           </h1>
 
           <p className="intro-copy">
