@@ -723,3 +723,16 @@ lib/posts.ts の createPost を使って投稿フォームの送信処理を完�
 
 - 4桁PINと隠し操作は仮運用向け。公開運用ではSupabase Authなどの管理者認証へ移行する
 >>>>>>> main
+## 2026/11/06　変更者：takoyaki
+
+### やったこと
+- Next.js を 16.4.0 から 16.4.5 に更新した（`next` と `eslint-config-next`、ブランチ `fix/next-update`）
+- `npm run build` の成功と、地図・詳細ページ・投稿フォームの表示を確認した
+
+### 決まったこと・変わったこと
+- 更新の理由：10/14のセキュリティ更新で、Cache Componentsを使うアプリで認証なしのコード実行が可能になる重大な脆弱性などが修正されたため
+- 各自、マージされたら `git pull` のあとに `npm install` を実行する
+
+### 残っている作業・次の人への連絡
+- 全員：`git pull` と `npm install` を実行する
+- Vercel：マージ後、ProductionとPreviewが Ready になるか確認する（Bさん）
