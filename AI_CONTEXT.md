@@ -824,3 +824,29 @@ lib/posts.ts の createPost を使って投稿フォームの送信処理を完�
 
 ### 残っている作業・次の人への連絡
 - 全員：コミット前に `git diff --stat` を見て、AI_CONTEXT.md の行が大量に減っていないか確認する
+
+## 2026/11/06　変更者：takoyaki（5回目）
+
+### やったこと
+- 地図の一覧で取得する列を、必要な7列だけに絞った（ブランチ `fix/reduce-posts-payload`）
+  - 対象：`id`、`lat`、`lng`、`place_name`、`crow_count`、`observed_at`、`photo_url`
+  - 一覧では、`note`（メモ）と `created_at` を取らない
+- `lib/posts.ts` に `PostSummary` 型を追加し、`getPosts()` と `getPostsInBounds()` の戻り値を `PostSummary[]` にした
+- `app/page.tsx` で、一覧の型を `Post` から `PostSummary` に置き換えた（8か所）
+- 通信量を測った（ブラウザのネットワークタブ）：投稿が数件の今は、1回あたり1.5kBで、問題なし
+
+### 決まったこと・変わったこと
+
+| 型 | 使う場所 | 含まれる列 |
+|---|---|---|
+| `PostSummary` | 地図・一覧（`getPosts`、`getPostsInBounds`） | 上の7列 |
+| `Post` | 詳細ページ、`createPost()` の戻り値 | 全列（`note`、`created_at` を含む） |
+
+- 一覧にメモや投稿日時を出したくなったら、`lib/posts.ts` の `PostSummary` と `SUMMARY_COLUMNS` に列名を足す
+- 列を絞った理由：メモは最大500字なので、長いメモの投稿が200件たまると、1回の取得が300KBを超えるため
+- 「軽い確認のあとに全件取得する」仕組みは見送る。投稿が100件を超えるか、Supabaseの転送量が無料枠の半分を超えたら、あらためて検討する
+
+### 残っている作業・次の人への連絡
+- 全員：マージされたら `git pull` を実行する（`npm install` は不要）
+- Supabaseの転送量を、ときどきダッシュボードの Usage で確認する
+- PowerShellで `stash@{0}` を使うときは、`'stash@{0}'` のようにシングルクォートで囲む

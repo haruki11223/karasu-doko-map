@@ -1,4 +1,3 @@
-
 "use client";
 
 import {
@@ -17,7 +16,7 @@ import {
   useMap,
 } from "@vis.gl/react-google-maps";
 
-import { getPosts, type Post } from "@/lib/posts";
+import { getPosts, type PostSummary } from "@/lib/posts";
 
 import {
   unlockAdminDelete,
@@ -219,9 +218,9 @@ function PostBottomSheet({
   onSelectPost,
   onClose,
 }: {
-  posts: Post[];
-  selectedPost: Post;
-  onSelectPost: (post: Post) => void;
+  posts: PostSummary[];
+  selectedPost: PostSummary;
+  onSelectPost: (post: PostSummary) => void;
   onClose: () => void;
 }) {
   const map = useMap();
@@ -233,7 +232,7 @@ function PostBottomSheet({
   ];
 
   // 一覧から投稿を選択
-  function handleSelect(post: Post) {
+  function handleSelect(post: PostSummary) {
     onSelectPost(post);
 
     map?.panTo({
@@ -499,9 +498,9 @@ function PostBottomSheet({
 function CrowMapSection({
   posts,
 }: {
-  posts: Post[];
+  posts: PostSummary[];
 }) {
-  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [selectedPost, setSelectedPost] = useState<PostSummary | null>(null);
 
   const apiKey =
     process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
@@ -578,7 +577,7 @@ function CrowMapSection({
 // ホーム画面
 // ========================================
 export default function Home() {
-  const [posts, setPosts] = useState<Post[]>([]);
+  const [posts, setPosts] = useState<PostSummary[]>([]);
 
   const adminTapCount = useRef(0);
   const adminTapTimer = useRef<number | null>(null);

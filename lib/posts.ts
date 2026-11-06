@@ -24,11 +24,21 @@ export type NewPost = {
   photo_url?: string; // Bさんの uploadPhoto() が返すURL
 };
 
+// 地図の一覧で使う列だけの形（メモや投稿日時は、詳細ページで取得する）
+export type PostSummary = Pick<
+  Post,
+  "id" | "lat" | "lng" | "place_name" | "crow_count" | "observed_at" | "photo_url"
+>;
+
+// 一覧で取得する列（転送量を抑えるため、必要な列だけにする）
+const SUMMARY_COLUMNS =
+  "id, lat, lng, place_name, crow_count, observed_at, photo_url";
+
 // 投稿の一覧を、見かけた時刻が新しい順に取得する（地図にピンを立てる用）
-export async function getPosts(): Promise<Post[]> {
+export async function getPosts(): Promise<PostSummary[]> {
   const { data, error } = await supabase
     .from("posts")
-    .select("*")
+    .select(SUMMARY_COLUMNS)
     .order("observed_at", { ascending: false })
     .limit(200); // 転送量を抑えるため、最大200件まで
 
@@ -47,12 +57,12 @@ export type Bounds = {
 };
 
 // 表示範囲内の投稿だけを、見かけた時刻が新しい順に取得する（地図を動かしたときの再取得用）
-export async function getPostsInBounds(bounds: Bounds): Promise<Post[]> {
+export async function getPostsInBounds(bounds: Bounds): Promise<PostSummary[]> {
   const { south, west, north, east } = bounds;
 
   const { data, error } = await supabase
     .from("posts")
-    .select("*")
+    .select(SUMMARY_COLUMNS)
     .gte("lat", south)
     .lte("lat", north)
     .gte("lng", west)
