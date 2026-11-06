@@ -9,7 +9,10 @@ import {
   InfoWindow,
 } from "@vis.gl/react-google-maps";
 import { getPosts, type Post } from "@/lib/posts";
-import { unlockAdminDelete, verifyAdminDeletePin } from "@/lib/admin-delete";
+import {
+  unlockAdminDelete,
+  verifyAdminDeletePin,
+} from "@/lib/admin-delete";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -18,7 +21,10 @@ function formatObservedAt(dateString: string | null): string {
   if (!dateString) return "不明";
 
   const targetDate = new Date(dateString);
-  if (Number.isNaN(targetDate.getTime())) return "不明";
+
+  if (Number.isNaN(targetDate.getTime())) {
+    return "不明";
+  }
 
   const now = new Date();
 
@@ -52,6 +58,7 @@ function formatObservedAt(dateString: string | null): string {
   }
 
   const hour = targetDate.getHours();
+
   let timeLabel: string;
 
   if (hour >= 4 && hour < 10) {
@@ -78,7 +85,6 @@ function CrowMapSection({
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
   const router = useRouter();
 
-  // Google Maps APIキー
   const apiKey =
     process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
 
@@ -92,7 +98,7 @@ function CrowMapSection({
     <div
       style={{
         width: "100%",
-        height: "100%",
+        height: "450px",
         minHeight: 0,
         borderRadius: "14px",
         overflow: "hidden",
@@ -199,7 +205,7 @@ function CrowMapSection({
                   {formatObservedAt(selectedPost.observed_at)}
                 </p>
 
-                {/* 個別投稿詳細ページへの移動 */}
+                {/* 投稿詳細ページへの移動 */}
                 <div
                   style={{
                     marginTop: "8px",
@@ -231,7 +237,7 @@ function CrowMapSection({
         </Map>
       </APIProvider>
 
-      {/* 読み込み中の表示 */}
+      {/* 投稿情報の読み込み中 */}
       {loading && (
         <div className="absolute top-4 left-4 bg-white px-3 py-1.5 rounded-lg shadow text-sm text-gray-600 z-10">
           地図上のピンを読み込み中...
@@ -283,7 +289,9 @@ export default function Home() {
     if (pin === null) return;
 
     if (!/^\d{4}$/.test(pin)) {
-      window.alert("パスワードは4桁の数字で入力してください。");
+      window.alert(
+        "パスワードは4桁の数字で入力してください。"
+      );
       return;
     }
 
@@ -324,7 +332,10 @@ export default function Home() {
           setPosts(data);
         }
       } catch (error) {
-        console.error("投稿の取得に失敗しました", error);
+        console.error(
+          "投稿の取得に失敗しました",
+          error
+        );
       } finally {
         isLoadingPosts = false;
 
@@ -334,22 +345,22 @@ export default function Home() {
       }
     }
 
+    // 初回読み込み
+    void loadPosts();
+
+    // ページが表示されたときに更新
     function refreshWhenVisible() {
       if (document.visibilityState === "visible") {
         void loadPosts();
       }
     }
 
-    // 初回読み込み
-    void loadPosts();
-
-    // 60秒ごとに更新
+    // 60秒ごとの自動更新
     const refreshInterval = window.setInterval(
       refreshWhenVisible,
       60_000
     );
 
-    // タブが再び表示されたときにも更新
     document.addEventListener(
       "visibilitychange",
       refreshWhenVisible
@@ -379,6 +390,7 @@ export default function Home() {
           <span className="brand-mark" aria-hidden="true">
             烏
           </span>
+
           <span>カラスどこマップ</span>
         </Link>
 
@@ -389,13 +401,18 @@ export default function Home() {
 
       <div className="page-content" id="top">
         {/* 説明部分 */}
-        <section className="intro" aria-labelledby="page-title">
+        <section
+          className="intro"
+          aria-labelledby="page-title"
+        >
           <p className="eyebrow">
-            <span className="eyebrow-dot" /> SIGHTING REPORT
+            <span className="eyebrow-dot" />
+            SIGHTING REPORT
           </p>
 
           <h1 id="page-title">
             カラスを見かけましたか
+
             <button
               className="admin-unlock-trigger"
               type="button"
@@ -416,14 +433,20 @@ export default function Home() {
           aria-labelledby="map-title"
           className="mb-8"
         >
-          <h2 id="map-title" className="sr-only">
+          <h2
+            id="map-title"
+            className="sr-only"
+          >
             金沢市カラス目撃マップ
           </h2>
 
           <Suspense
             fallback={
               <div
-                style={{ width: "100%", height: "450px" }}
+                style={{
+                  width: "100%",
+                  height: "450px",
+                }}
                 className="flex items-center justify-center bg-gray-100 rounded-xl"
               >
                 地図を読み込み中...
