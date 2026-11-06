@@ -1,23 +1,28 @@
 
-
 "use client";
 
-import { useEffect, useRef, useState, Suspense } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  Suspense,
+} from "react";
+
+import type { CSSProperties } from "react";
+
 import {
   APIProvider,
   Map,
   Marker,
-  InfoWindow,
+  useMap,
 } from "@vis.gl/react-google-maps";
 
 import { getPosts, type Post } from "@/lib/posts";
+
 import {
   unlockAdminDelete,
   verifyAdminDeletePin,
 } from "@/lib/admin-delete";
-
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 // ========================================
 // 投稿日時を表示する関数
@@ -80,19 +85,424 @@ function formatObservedAt(dateString: string | null): string {
 }
 
 // ========================================
+// 地図操作ボタン
+// ========================================
+function MapControls() {
+  const map = useMap();
+  const [isLocating, setIsLocating] = useState(false);
+
+  // 拡大
+  function handleZoomIn() {
+    if (!map) return;
+
+    map.setZoom((map.getZoom() ?? 13) + 1);
+  }
+
+  // 縮小
+  function handleZoomOut() {
+    if (!map) return;
+
+    map.setZoom((map.getZoom() ?? 13) - 1);
+  }
+
+  // 現在地
+  function handleCurrentLocation() {
+    if (!map) return;
+
+    if (!navigator.geolocation) {
+      window.alert("このブラウザでは現在地を取得できません。");
+      return;
+    }
+
+    setIsLocating(true);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        map.panTo({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+
+        map.setZoom(16);
+        setIsLocating(false);
+      },
+      (error) => {
+        console.error("現在地の取得に失敗しました", error);
+
+        setIsLocating(false);
+
+        if (error.code === error.PERMISSION_DENIED) {
+          window.alert("位置情報の使用が許可されていません。");
+        } else {
+          window.alert("現在地を取得できませんでした。");
+        }
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
+  }
+
+  const buttonStyle: CSSProperties = {
+    width: "48px",
+    height: "48px",
+    borderRadius: "50%",
+    border: "none",
+    background: "#ffffff",
+    color: "#333333",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: "26px",
+    cursor: "pointer",
+    padding: 0,
+  };
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        right: "16px",
+        top: "42%",
+        transform: "translateY(-50%)",
+        zIndex: 10,
+        display: "flex",
+        flexDirection: "column",
+        gap: "10px",
+      }}
+    >
+      <button
+        type="button"
+        aria-label="地図を拡大"
+        onClick={handleZoomIn}
+        style={buttonStyle}
+      >
+        +
+      </button>
+
+      <button
+        type="button"
+        aria-label="地図を縮小"
+        onClick={handleZoomOut}
+        style={buttonStyle}
+      >
+        −
+      </button>
+
+      <button
+        type="button"
+        aria-label="現在地を表示"
+        onClick={handleCurrentLocation}
+        disabled={isLocating}
+        style={{
+          ...buttonStyle,
+          color: "#1677e8",
+          fontSize: "23px",
+          opacity: isLocating ? 0.6 : 1,
+        }}
+      >
+        {isLocating ? "…" : "➤"}
+      </button>
+    </div>
+  );
+}
+
+// ========================================
+// 投稿一覧・選択した投稿の詳細
+// ========================================
+function PostBottomSheet({
+  posts,
+  selectedPost,
+  onSelectPost,
+  onClose,
+}: {
+  posts: Post[];
+  selectedPost: Post;
+  onSelectPost: (post: Post) => void;
+  onClose: () => void;
+}) {
+  const map = useMap();
+
+  // 選択中の投稿を先頭にする
+  const sortedPosts = [
+    ...posts.filter((post) => post.id === selectedPost.id),
+    ...posts.filter((post) => post.id !== selectedPost.id),
+  ];
+
+  // 一覧から投稿を選択
+  function handleSelect(post: Post) {
+    onSelectPost(post);
+
+    map?.panTo({
+      lat: post.lat,
+      lng: post.lng,
+    });
+  }
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 30,
+        height: "min(65dvh, 600px)",
+        minHeight: "300px",
+        background: "#ffffff",
+        borderRadius: "20px 20px 0 0",
+        boxShadow: "0 -4px 20px rgba(0,0,0,0.18)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
+      {/* 上部のつまみ */}
+      <div
+        style={{
+          padding: "10px 0 6px",
+          display: "flex",
+          justifyContent: "center",
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            width: "42px",
+            height: "5px",
+            borderRadius: "10px",
+            background: "#d5d5d5",
+          }}
+        />
+      </div>
+
+      {/* 一覧のタイトル */}
+      <div
+        style={{
+          padding: "8px 18px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderBottom: "1px solid #eeeeee",
+          flexShrink: 0,
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontSize: "18px",
+              fontWeight: 700,
+              color: "#333333",
+            }}
+          >
+            カラス目撃情報
+          </div>
+
+          <div
+            style={{
+              marginTop: "3px",
+              fontSize: "12px",
+              color: "#888888",
+            }}
+          >
+            {posts.length}件の投稿
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="一覧を閉じる"
+          style={{
+            width: "36px",
+            height: "36px",
+            border: "none",
+            borderRadius: "50%",
+            background: "#f1f1f1",
+            color: "#555555",
+            fontSize: "23px",
+            cursor: "pointer",
+          }}
+        >
+          ×
+        </button>
+      </div>
+
+      {/* 投稿一覧 */}
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          overscrollBehavior: "contain",
+        }}
+      >
+        {sortedPosts.map((post) => {
+          const isSelected = post.id === selectedPost.id;
+
+          return (
+            <div
+              key={post.id}
+              onClick={() => handleSelect(post)}
+              style={{
+                padding: "15px 16px",
+                borderBottom: "1px solid #dddddd",
+                background: isSelected ? "#edf4ff" : "#ffffff",
+                cursor: "pointer",
+              }}
+            >
+              {/* 場所・日時・羽数 */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: 700,
+                      color: "#333333",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {post.place_name || "場所不明"}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: "5px",
+                      fontSize: "13px",
+                      color: "#66809a",
+                    }}
+                  >
+                    {formatObservedAt(post.observed_at)}
+                    {"　"}
+                    {post.crow_count ?? "不明"}羽
+                  </div>
+                </div>
+
+                {isSelected && (
+                  <span
+                    style={{
+                      fontSize: "12px",
+                      color: "#315b45",
+                      fontWeight: 700,
+                    }}
+                  >
+                    選択中
+                  </span>
+                )}
+              </div>
+
+              {/* 選択した投稿だけ詳細を表示 */}
+              {isSelected && (
+                <div
+                  style={{
+                    marginTop: "13px",
+                    paddingTop: "12px",
+                    borderTop: "1px solid #d9e3ef",
+                  }}
+                >
+                  {/* 写真が登録されている場合だけ表示 */}
+                  {post.photo_url && (
+                    <div
+                      style={{
+                        width: "100%",
+                        marginBottom: "12px",
+                        borderRadius: "10px",
+                        overflow: "hidden",
+                        background: "#f0f0f0",
+                      }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={post.photo_url}
+                        alt="カラスの目撃写真"
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          maxHeight: "240px",
+                          aspectRatio: "16 / 9",
+                          objectFit: "cover",
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      color: "#444444",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    目撃日時：
+                    {formatObservedAt(post.observed_at)}
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      color: "#444444",
+                      marginBottom: "12px",
+                    }}
+                  >
+                    羽数：
+                    {post.crow_count ?? "不明"} 羽
+                  </div>
+
+                  {/* 詳細ページへ移動 */}
+                  <a
+                    href={`/posts/${post.id}`}
+                    onClick={(event) => event.stopPropagation()}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: "100%",
+                      minHeight: "42px",
+                      borderRadius: "8px",
+                      background: "#315b45",
+                      color: "#ffffff",
+                      fontSize: "14px",
+                      fontWeight: 700,
+                      textDecoration: "none",
+                    }}
+                  >
+                    詳細を見る →
+                  </a>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ========================================
 // マップ表示コンポーネント
 // ========================================
 function CrowMapSection({
   posts,
-  loading,
 }: {
   posts: Post[];
-  loading: boolean;
 }) {
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
-  const router = useRouter();
 
-  // Google Maps APIキー
   const apiKey =
     process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || "";
 
@@ -105,14 +515,15 @@ function CrowMapSection({
   return (
     <div
       style={{
+        position: "absolute",
+        inset: 0,
         width: "100%",
-        height: "450px",
-        minHeight: 0,
-        borderRadius: "14px",
+        height: "100%",
+        margin: 0,
+        padding: 0,
+        border: "none",
+        borderRadius: 0,
         overflow: "hidden",
-        border: "1px solid #e5eae5",
-        boxShadow: "0 8px 28px rgb(32 54 40 / 5%)",
-        position: "relative",
       }}
     >
       <APIProvider apiKey={apiKey}>
@@ -121,13 +532,14 @@ function CrowMapSection({
           defaultZoom={13}
           gestureHandling="greedy"
           disableDefaultUI={true}
+          clickableIcons={false}
           style={{
             width: "100%",
             height: "100%",
           }}
           onClick={() => setSelectedPost(null)}
         >
-          {/* 投稿されたカラス情報のピン */}
+          {/* カラスの目撃情報のピン */}
           {posts.map((post) => (
             <Marker
               key={post.id}
@@ -138,126 +550,26 @@ function CrowMapSection({
               title={post.place_name || "カラス目撃情報"}
               clickable={true}
               onClick={(event) => {
-                if (event.domEvent) {
-                  event.domEvent.stopPropagation();
-                }
-
+                event.domEvent?.stopPropagation();
                 setSelectedPost(post);
               }}
             />
           ))}
-
-          {/* ピンを選択したときの詳細情報 */}
-          {selectedPost && (
-            <InfoWindow
-              position={{
-                lat: selectedPost.lat,
-                lng: selectedPost.lng,
-              }}
-              onCloseClick={() => setSelectedPost(null)}
-              pixelOffset={[0, -35]}
-            >
-              <div
-                style={{
-                  padding: "6px",
-                  maxWidth: "220px",
-                  fontSize: "13px",
-                  color: "#333",
-                }}
-              >
-                {/* 投稿写真 */}
-                {selectedPost.photo_url && (
-                  <div
-                    style={{
-                      marginBottom: "8px",
-                      borderRadius: "6px",
-                      overflow: "hidden",
-                      maxHeight: "120px",
-                    }}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={selectedPost.photo_url}
-                      alt="目撃された写真"
-                      style={{
-                        width: "100%",
-                        height: "auto",
-                        objectFit: "cover",
-                      }}
-                    />
-                  </div>
-                )}
-
-                {/* 場所 */}
-                <h3
-                  style={{
-                    fontWeight: "bold",
-                    marginBottom: "4px",
-                    fontSize: "14px",
-                    borderBottom: "1px solid #ccc",
-                    paddingBottom: "3px",
-                  }}
-                >
-                  {selectedPost.place_name || "カラス目撃情報"}
-                </h3>
-
-                {/* 羽数 */}
-                <p style={{ margin: "2px 0" }}>
-                  <strong>羽数:</strong>{" "}
-                  {selectedPost.crow_count ?? "不明"} 羽
-                </p>
-
-                {/* 目撃日時 */}
-                <p style={{ margin: "2px 0" }}>
-                  <strong>日時:</strong>{" "}
-                  {formatObservedAt(selectedPost.observed_at)}
-                </p>
-
-                {/* 投稿詳細ページへの移動 */}
-                <div
-                  style={{
-                    marginTop: "8px",
-                    textAlign: "right",
-                  }}
-                >
-                  <button
-                    type="button"
-                    onClick={() =>
-                      router.push(`/posts/${selectedPost.id}`)
-                    }
-                    style={{
-                      backgroundColor: "#315b45",
-                      color: "#fff",
-                      border: "none",
-                      padding: "5px 11px",
-                      borderRadius: "5px",
-                      fontSize: "12px",
-                      fontWeight: "bold",
-                      cursor: "pointer",
-                    }}
-                  >
-                    詳細を見る →
-                  </button>
-                </div>
-              </div>
-            </InfoWindow>
-          )}
         </Map>
+
+        {/* 地図操作ボタン */}
+        <MapControls />
+
+        {/* ピン選択時の投稿一覧 */}
+        {selectedPost && (
+          <PostBottomSheet
+            posts={posts}
+            selectedPost={selectedPost}
+            onSelectPost={setSelectedPost}
+            onClose={() => setSelectedPost(null)}
+          />
+        )}
       </APIProvider>
-
-      {/* 投稿情報の読み込み中 */}
-      {loading && (
-        <div className="absolute top-4 left-4 bg-white px-3 py-1.5 rounded-lg shadow text-sm text-gray-600 z-10">
-          地図上のピンを読み込み中...
-        </div>
-      )}
-
-      {/* 投稿情報がない場合 */}
-      {!loading && posts.length === 0 && (
-        <div className="absolute top-4 left-4 bg-white px-3 py-1.5 rounded-lg shadow text-sm text-gray-600 z-10">
-          まだカラスの目撃情報はありません。
-        </div>
-      )}
     </div>
   );
 }
@@ -267,13 +579,12 @@ function CrowMapSection({
 // ========================================
 export default function Home() {
   const [posts, setPosts] = useState<Post[]>([]);
-  const [postsLoading, setPostsLoading] = useState(true);
 
   const adminTapCount = useRef(0);
   const adminTapTimer = useRef<number | null>(null);
 
   // ========================================
-  // 管理者モードの起動
+  // 管理者モード
   // ========================================
   async function handleAdminTriggerClick() {
     adminTapCount.current += 1;
@@ -301,9 +612,7 @@ export default function Home() {
     if (pin === null) return;
 
     if (!/^\d{4}$/.test(pin)) {
-      window.alert(
-        "パスワードは4桁の数字で入力してください。"
-      );
+      window.alert("パスワードは4桁の数字で入力してください。");
       return;
     }
 
@@ -328,14 +637,14 @@ export default function Home() {
   }
 
   // ========================================
-  // 投稿情報の取得・自動更新
+  // 投稿情報の取得・60秒ごとの更新
   // ========================================
   useEffect(() => {
     let isActive = true;
     let isLoadingPosts = false;
 
     async function loadPosts() {
-      if (isLoadingPosts) return;
+      if (!isActive || isLoadingPosts) return;
 
       isLoadingPosts = true;
 
@@ -352,10 +661,6 @@ export default function Home() {
         );
       } finally {
         isLoadingPosts = false;
-
-        if (isActive) {
-          setPostsLoading(false);
-        }
       }
     }
 
@@ -393,6 +698,7 @@ export default function Home() {
 
       if (adminTapTimer.current !== null) {
         window.clearTimeout(adminTapTimer.current);
+        adminTapTimer.current = null;
       }
     };
   }, []);
@@ -401,110 +707,90 @@ export default function Home() {
   // 画面表示
   // ========================================
   return (
-    <main className="app-shell">
-      {/* ヘッダー */}
-      <header className="topbar">
-        <Link
-          className="brand"
-          href="/"
-          aria-label="カラスどこマップ ホーム"
-          onClick={handleAdminTriggerClick}
-        >
-          <span className="brand-mark" aria-hidden="true">
-            烏
-          </span>
-
-          <span>カラスどこマップ</span>
-        </Link>
-
-        <span className="topbar-note">
-          金沢のカラス情報を共有
-        </span>
-      </header>
-
-      <div className="page-content" id="top">
-        {/* 説明部分 */}
-        <section
-          className="intro"
-          aria-labelledby="page-title"
-        >
-          <p className="eyebrow">
-            <span className="eyebrow-dot" />
-            SIGHTING REPORT
-          </p>
-
-          <h1 id="page-title">
-            カラスを見かけましたか
-          </h1>
-
-          <p className="intro-copy">
-            目撃情報を共有して、地域のカラス被害を減らすために役立てましょう。
-          </p>
-        </section>
-
-        {/* マップ表示エリア */}
-        <section
-          aria-labelledby="map-title"
-          className="mb-8"
-        >
-          <h2
-            id="map-title"
-            className="sr-only"
+    <main
+      style={{
+        position: "fixed",
+        inset: 0,
+        width: "100%",
+        height: "100vh",
+        height: "100dvh",
+        margin: 0,
+        padding: 0,
+        overflow: "hidden",
+        background: "#ffffff",
+        border: "none",
+        borderRadius: 0,
+        boxShadow: "none",
+        isolation: "isolate",
+      }}
+    >
+      {/* 全画面マップ */}
+      <Suspense
+        fallback={
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "#ffffff",
+            }}
           >
-            金沢市カラス目撃マップ
-          </h2>
+            地図を読み込み中...
+          </div>
+        }
+      >
+        <CrowMapSection posts={posts} />
+      </Suspense>
 
-          <Suspense
-            fallback={
-              <div
-                style={{
-                  width: "100%",
-                  height: "450px",
-                }}
-                className="flex items-center justify-center bg-gray-100 rounded-xl"
-              >
-                地図を読み込み中...
-              </div>
-            }
-          >
-            <CrowMapSection
-              posts={posts}
-              loading={postsLoading}
-            />
-          </Suspense>
-        </section>
-      </div>
-
-      {/* 画面下部の投稿ボタン */}
-      <div
+      {/* 投稿画面へ移動するボタン */}
+      <a
+        href="/post"
+        aria-label="目撃情報を投稿する"
         style={{
-          flex: "0 0 auto",
-          padding: "10px 16px 18px",
-          background: "#f5f7f4",
+          position: "absolute",
+          left: "16px",
+          right: "16px",
+          bottom: "max(20px, env(safe-area-inset-bottom))",
+          zIndex: 20,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "58px",
+          border: "none",
+          borderRadius: "12px",
+          background: "#315b45",
+          color: "#ffffff",
+          fontSize: "16px",
+          fontWeight: 700,
+          textDecoration: "none",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.22)",
+          cursor: "pointer",
+          WebkitTapHighlightColor: "transparent",
         }}
       >
-        <Link
-          href="/post"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "100%",
-            maxWidth: "640px",
-            minHeight: "50px",
-            margin: "0 auto",
-            borderRadius: "10px",
-            background: "#315b45",
-            color: "#ffffff",
-            fontSize: "14px",
-            fontWeight: 700,
-            textDecoration: "none",
-            boxShadow: "0 4px 12px rgb(32 54 40 / 12%)",
-          }}
-        >
-          ＋ 目撃情報を投稿
-        </Link>
-      </div>
+        ＋ 目撃情報を投稿
+      </a>
+
+      {/* 管理者モード起動用の透明なクリック領域 */}
+      <button
+        type="button"
+        aria-label="管理者モード"
+        onClick={handleAdminTriggerClick}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "44px",
+          height: "44px",
+          opacity: 0,
+          border: "none",
+          padding: 0,
+          zIndex: 40,
+          cursor: "default",
+        }}
+      />
     </main>
   );
 }
