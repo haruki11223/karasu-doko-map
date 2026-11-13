@@ -77,7 +77,7 @@ VS Code でプロジェクトのフォルダを開き、ターミナル（PowerS
 
 ### 3-1. 新しいパソコンで初めて作業するとき（1回だけ）
 
-1. Git と Node.js（LTS版、v24）をインストールする
+1. Git と Node.js（LTS版、v26）をインストールする。セキュリティ更新が出たら `winget upgrade OpenJS.NodeJS.LTS` で更新する（2026/11/13 時点で v26.13.1 以上）
 2. Git に名前とメールを登録する（GitHubと同じもの）
    ```
    git config --global user.name "GitHubのユーザー名"
